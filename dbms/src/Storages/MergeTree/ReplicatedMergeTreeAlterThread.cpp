@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/ReplicatedMergeTreeAlterThread.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeTableMetadata.h>
+#include <Storages/MergeTree/ReplicatedMergeTreeColumnsHash.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Common/setThreadName.h>
@@ -160,7 +161,9 @@ void ReplicatedMergeTreeAlterThread::run()
                 /// Update part metadata in ZooKeeper.
                 Coordination::Requests ops;
                 ops.emplace_back(zkutil::makeSetRequest(
-                    storage.replica_path + "/parts/" + part->name + "/columns", transaction->getNewColumns().toString(), -1));
+                        storage.replica_path + "/parts/" + part->name + "/columns",
+                        ReplicatedMergeTreeColumnsHash::fromColumns(transaction->getNewColumns()).toString(),
+                        -1));
                 ops.emplace_back(zkutil::makeSetRequest(
                     storage.replica_path + "/parts/" + part->name + "/checksums",
                     storage.getChecksumsForZooKeeper(transaction->getNewChecksums()),

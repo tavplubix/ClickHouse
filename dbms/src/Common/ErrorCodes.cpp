@@ -403,6 +403,7 @@ namespace ErrorCodes
     extern const int NULL_POINTER_DEREFERENCE = 426;
     extern const int CANNOT_COMPILE_REGEXP = 427;
     extern const int UNKNOWN_LOG_LEVEL = 428;
+    extern const int BAD_ZNODE_CONTENTS = 429;
 
     extern const int KEEPER_EXCEPTION = 999;
     extern const int POCO_EXCEPTION = 1000;

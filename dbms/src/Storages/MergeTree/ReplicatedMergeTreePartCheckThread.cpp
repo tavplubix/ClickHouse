@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/ReplicatedMergeTreePartCheckThread.h>
 #include <Storages/MergeTree/checkDataPart.h>
+#include <Storages/MergeTree/ReplicatedMergeTreeColumnsHash.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Common/setThreadName.h>
 
@@ -215,9 +216,9 @@ void ReplicatedMergeTreePartCheckThread::checkPart(const String & part_name)
                     zookeeper->get(storage.replica_path + "/parts/" + part_name + "/checksums"));
                 zk_checksums.checkEqual(part->checksums, true);
 
-                auto zk_columns = NamesAndTypesList::parse(
-                    zookeeper->get(storage.replica_path + "/parts/" + part_name + "/columns"));
-                if (part->columns != zk_columns)
+                auto zk_columns_str = zookeeper->get(storage.replica_path + "/parts/" + part_name + "/columns");
+                if (ReplicatedMergeTreeColumnsHash::fromColumns(part->columns)
+                    != ReplicatedMergeTreeColumnsHash::fromZNode(zk_columns_str))
                     throw Exception("Columns of local part " + part_name + " are different from ZooKeeper", ErrorCodes::TABLE_DIFFERS_TOO_MUCH);
 
                 checkDataPart(
