@@ -1,10 +1,8 @@
 #include <Storages/MergeTree/ReplicatedMergeTreeColumnsHash.h>
 #include <Core/NamesAndTypes.h>
 #include <IO/WriteHelpers.h>
-#include <IO/Operators.h>
 #include <Common/SipHash.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/hex.h>
 
 namespace DB
 {
@@ -25,15 +23,16 @@ ReplicatedMergeTreeColumnsHash ReplicatedMergeTreeColumnsHash::fromZNode(const S
         char hash_data[16];
         hash.get128(hash_data);
 
-        String result;
-        result.resize(32);
-        for (size_t i = 0; i < 16; ++i)
-            writeHexByteLowercase(hash_data[i], &result[2 * i]);
-
+        std::array<char, 16> result;
+        memcpy(result.data(), hash_data, 16);
         return ReplicatedMergeTreeColumnsHash(std::move(result));
     }
-    else if (zk_columns_node.length() == 32)
-        return ReplicatedMergeTreeColumnsHash(zk_columns_node);
+    else if (zk_columns_node.length() == 16)
+    {
+        std::array<char, 16> result;
+        memcpy(result.data(), zk_columns_node.data(), 16);
+        return ReplicatedMergeTreeColumnsHash(std::move(result));
+    }
     else
         throw Exception("Suspiciously looking columns znode, length: " + DB::toString(zk_columns_node.length()),
             ErrorCodes::BAD_ZNODE_CONTENTS);
@@ -46,7 +45,7 @@ ReplicatedMergeTreeColumnsHash ReplicatedMergeTreeColumnsHash::fromColumns(const
 
 void ReplicatedMergeTreeColumnsHash::write(WriteBuffer & out) const
 {
-    out << hash_hex;
+    out.write(hash.data(), hash.size());
 }
 
 }

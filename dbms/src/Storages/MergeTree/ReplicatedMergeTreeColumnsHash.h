@@ -2,6 +2,7 @@
 
 #include <Core/Types.h>
 #include <IO/WriteBuffer.h>
+#include <array>
 
 
 namespace DB
@@ -16,15 +17,15 @@ public:
     static ReplicatedMergeTreeColumnsHash fromColumns(const NamesAndTypesList & columns);
 
     void write(WriteBuffer & out) const;
-    String toString() const { return hash_hex; }
+    String toString() const { return String(hash.begin(), hash.end()); }
 
-    bool operator==(const ReplicatedMergeTreeColumnsHash & other) const { return hash_hex == other.hash_hex; }
+    bool operator==(const ReplicatedMergeTreeColumnsHash & other) const { return hash == other.hash; }
     bool operator!=(const ReplicatedMergeTreeColumnsHash & other) const { return !(*this == other); }
 
 private:
-    ReplicatedMergeTreeColumnsHash(String hash_hex_) : hash_hex(std::move(hash_hex_)) {}
+    ReplicatedMergeTreeColumnsHash(std::array<char, 16> hash_) : hash(std::move(hash_)) {}
 
-    String hash_hex;
+    std::array<char, 16> hash;
 };
 
 }
