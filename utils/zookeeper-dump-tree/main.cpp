@@ -50,7 +50,8 @@ try
             throw;
         }
 
-        std::cout << it->first << '\t' << response.stat.numChildren << '\t' << response.stat.dataLength << '\n';
+        std::cout << it->first << '\t' << response.stat.numChildren << '\t' << response.stat.dataLength
+                  << '\t' << response.stat.ctime << '\t' << response.stat.mtime << '\n';
 
         for (const auto & name : response.names)
         {

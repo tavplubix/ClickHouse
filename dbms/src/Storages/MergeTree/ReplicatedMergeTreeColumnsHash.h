@@ -19,6 +19,8 @@ public:
     void write(WriteBuffer & out) const;
     String toString() const { return String(hash.begin(), hash.end()); }
 
+    const std::array<char, 16> & get() const { return hash; }
+
     bool operator==(const ReplicatedMergeTreeColumnsHash & other) const { return hash == other.hash; }
     bool operator!=(const ReplicatedMergeTreeColumnsHash & other) const { return !(*this == other); }
 

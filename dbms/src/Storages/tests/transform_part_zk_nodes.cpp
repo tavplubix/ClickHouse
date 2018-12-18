@@ -1,4 +1,7 @@
 #include <Storages/MergeTree/ReplicatedMergeTreeColumnsHash.h>
+#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
@@ -56,7 +59,7 @@ try
         std::future<Coordination::ListResponse> children_future;
 
         Node * parent = nullptr;
-        std::future<Coordination::SetResponse> set_future;
+        std::future<Coordination::MultiResponse> set_future;
     };
 
     std::list<Node> nodes_queue;
@@ -82,21 +85,54 @@ try
         if (get_response.stat.ephemeralOwner)
             continue;
 
-        if (endsWith(it->path, "/columns") && it->path.find("/parts/") != std::string::npos)
+        if (it->path.find("/parts/") != std::string::npos
+            && !endsWith(it->path, "/columns")
+            && !endsWith(it->path, "/checksums"))
         {
-            std::string new_data = DB::ReplicatedMergeTreeColumnsHash::fromZNode(get_response.data).toString();
-            it->set_future = zookeeper.asyncSet(it->path, new_data);
+            if (!children_response.names.empty())
+            {
+                auto columns_hash = DB::ReplicatedMergeTreeColumnsHash::fromZNode(
+                    zookeeper.get(it->path + "/columns"));
+
+                auto checksums = DB::MinimalisticDataPartChecksums::deserializeFrom(
+                    zookeeper.get(it->path + "/checksums"));
+
+                DB::WriteBufferFromOwnString out;
+                DB::writeString("part header format version: 1\n", out);
+                out.write(columns_hash.get().data(), columns_hash.get().size());
+
+                /// copy-pasted from MinimalisticDataPartChecksums::serialize
+                DB::writeVarUInt(checksums.num_compressed_files, out);
+                DB::writeVarUInt(checksums.num_uncompressed_files, out);
+
+                DB::writePODBinary(checksums.hash_of_all_files, out);
+                DB::writePODBinary(checksums.hash_of_uncompressed_files, out);
+                DB::writePODBinary(checksums.uncompressed_hash_of_compressed_files, out);
+
+                Coordination::Requests ops;
+                ops.emplace_back(zkutil::makeRemoveRequest(it->path + "/columns", -1));
+                ops.emplace_back(zkutil::makeRemoveRequest(it->path + "/checksums", -1));
+                ops.emplace_back(zkutil::makeSetRequest(it->path, out.str(), -1));
+
+                it->set_future = zookeeper.asyncMulti(ops);
+            }
+            else
+            {
+                /// add junk txns to force snapshot creation
+                Coordination::Requests ops;
+                ops.emplace_back(zkutil::makeSetRequest(it->path, get_response.data, -1));
+                it->set_future = zookeeper.asyncMulti(ops);
+            }
         }
-
-        get_response.data.clear();
-        get_response.data.shrink_to_fit();
-
-        for (const auto & name : children_response.names)
+        else
         {
-            std::string child_path = it->path == "/" ? it->path + name : it->path + '/' + name;
-            nodes_queue.emplace_back(
-                child_path, zookeeper.asyncGet(child_path), zookeeper.asyncGetChildren(child_path),
-                &(*it));
+            for (const auto & name : children_response.names)
+            {
+                std::string child_path = it->path == "/" ? it->path + name : it->path + '/' + name;
+                nodes_queue.emplace_back(
+                    child_path, zookeeper.asyncGet(child_path), zookeeper.asyncGetChildren(child_path),
+                    &(*it));
+            }
         }
     }
 
