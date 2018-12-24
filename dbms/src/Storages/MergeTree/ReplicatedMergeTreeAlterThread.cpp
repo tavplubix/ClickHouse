@@ -1,6 +1,6 @@
 #include <Storages/MergeTree/ReplicatedMergeTreeAlterThread.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeTableMetadata.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeColumnsHash.h>
+#include <Storages/MergeTree/ReplicatedMergeTreePartHeader.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Common/setThreadName.h>
@@ -160,14 +160,22 @@ void ReplicatedMergeTreeAlterThread::run()
 
                 /// Update part metadata in ZooKeeper.
                 Coordination::Requests ops;
-                ops.emplace_back(zkutil::makeSetRequest(
-                        storage.replica_path + "/parts/" + part->name + "/columns",
-                        ReplicatedMergeTreeColumnsHash::fromColumns(transaction->getNewColumns()).toString(),
-                        -1));
-                ops.emplace_back(zkutil::makeSetRequest(
-                    storage.replica_path + "/parts/" + part->name + "/checksums",
-                    storage.getChecksumsForZooKeeper(transaction->getNewChecksums()),
-                    -1));
+                String part_path = storage.replica_path + "/parts/" + part->name;
+                if (storage.data.settings.use_minimalistic_part_header_in_zookeeper)
+                {
+                    auto part_header = ReplicatedMergeTreePartHeader::fromColumnsAndChecksums(
+                        transaction->getNewColumns(), transaction->getNewChecksums());
+                    ops.emplace_back(zkutil::makeSetRequest(part_path, part_header.toString(), -1));
+                    /// We could remove /columns and /checksums nodes here, but this will lead to
+                    /// additional ZK operations to check the number of children.
+                }
+                else
+                {
+                    ops.emplace_back(zkutil::makeSetRequest(
+                        part_path + "/columns", transaction->getNewColumns().toString(), -1));
+                    ops.emplace_back(zkutil::makeSetRequest(
+                        part_path + "/checksums", storage.getChecksumsForZooKeeper(transaction->getNewChecksums()), -1));
+                }
 
                 try
                 {

@@ -148,6 +148,12 @@ struct MergeTreeSettings
       */                                                                                                      \
     M(SettingBool, use_minimalistic_checksums_in_zookeeper, true)                                             \
                                                                                                               \
+    /** Store part header (checksums and columns in a compact format and a single znode                       \
+      *  instead of separate znodes (/columns and /checksums).                                                \
+      * Before enabling check that all replicas support new format.                                           \
+      */                                                                                                      \
+    M(SettingBool, use_minimalistic_part_header_in_zookeeper, false)                                          \
+                                                                                                              \
     /** How many records about mutations that are done to keep.                                               \
      *  If zero, then keep all of them */                                                                     \
     M(SettingUInt64, finished_mutations_to_keep, 100)                                                         \
