@@ -152,7 +152,7 @@ struct MergeTreeSettings
       *  instead of separate znodes (/columns and /checksums).                                                \
       * Before enabling check that all replicas support new format.                                           \
       */                                                                                                      \
-    M(SettingBool, use_minimalistic_part_header_in_zookeeper, false)                                          \
+    M(SettingBool, use_minimalistic_part_header_in_zookeeper, true)                                           \
                                                                                                               \
     /** How many records about mutations that are done to keep.                                               \
      *  If zero, then keep all of them */                                                                     \
