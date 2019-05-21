@@ -18,9 +18,13 @@ public:
     ColumnPtr evaluateAll();
 
 private:
-    std::pair<String, NamesAndTypesList> replaceLiteralsWithDummyIdentifiers(TokenIterator & begin, TokenIterator & end, const IDataType & result_column_type);
+    std::pair<String, NamesAndTypes> replaceLiteralsWithDummyIdentifiers(TokenIterator & begin, TokenIterator & end);
 
     static void addNodesToCastResult(const IDataType & result_column_type, ASTPtr & expr);
+
+    // TODO void fixArgumentsThatAreAlwaysConstant(...);
+    void fixUnarySignsAndIntegralTypes(NamesAndTypes & columns_for_literals, ASTPtr & ast_template);
+    void fixNullable(NamesAndTypes & columns_for_literals, bool result_type_is_nullable);
 
 private:
     std::vector<String> tokens;

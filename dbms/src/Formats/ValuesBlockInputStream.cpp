@@ -79,7 +79,7 @@ Block ValuesBlockInputStream::readImpl()
                     }
                     catch (DB::Exception & e)
                     {
-                        if (e.code() != ErrorCodes::CANNOT_PARSE_EXPRESSION_USING_TEMPLATE)
+                        if (e.code() != 0/*ErrorCodes::CANNOT_PARSE_EXPRESSION_USING_TEMPLATE*/)
                             throw;
                         /// Expression in the current row is not match generated on the first row template.
                         /// Evaluate expressions, which were parsed using this template.
@@ -186,6 +186,10 @@ ValuesBlockInputStream::parseExpression(IColumn & column, size_t column_idx, boo
                         ErrorCodes::SYNTAX_ERROR);
     }
 
+    std::cerr << "Parsing col " << column_idx << "\n";
+    ast->dumpTree(std::cerr, 5);
+    std::cerr << "\n";
+
     std::pair<Field, DataTypePtr> value_raw = evaluateConstantExpression(ast, *context);
     Field value = convertFieldToType(value_raw.first, type, value_raw.second.get());
 
@@ -215,7 +219,7 @@ ValuesBlockInputStream::parseExpression(IColumn & column, size_t column_idx, boo
             assertDelimAfterValue(column_idx);
             return;
         }
-        catch (...)
+        catch (int)
         {
             /// Continue parsing without template
             templates[column_idx].reset();
