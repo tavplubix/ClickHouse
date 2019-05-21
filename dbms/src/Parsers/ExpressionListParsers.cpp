@@ -25,6 +25,7 @@ const char * ParserMultiplicativeExpression::operators[] =
 const char * ParserUnaryMinusExpression::operators[] =
 {
     "-",     "negate",
+    "+",     "identity",        // TODO add function identityArithmetic (for arithmetic types only)
     nullptr
 };
 
@@ -485,9 +486,10 @@ bool ParserPrefixUnaryOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Ex
 
 bool ParserUnaryMinusExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    /// As an exception, negative numbers should be parsed as literals, and not as an application of the operator.
+    /// As an exception, negative numbers and numbers with leading plus should be parsed as literals,
+    /// and not as an application of the operator.
 
-    if (pos->type == TokenType::Minus)
+    if (pos->type == TokenType::Minus || pos->type == TokenType::Plus)
     {
         ParserLiteral lit_p;
         Pos begin = pos;
