@@ -211,7 +211,7 @@ Possible values:
 
 Default value: 0.
 
-## input_format_null_as_default {#settings-input_format_null_as_default}
+## input_format_csv_null_as_default {#settings-input_format_csv_null_as_default}
 
 Enables or disables using default values if input data contain `NULL`, but data type of corresponding column in not `Nullable(T)` (for CSV format).
 

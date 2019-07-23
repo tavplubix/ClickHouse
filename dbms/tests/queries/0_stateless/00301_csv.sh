@@ -24,7 +24,7 @@ echo '"2016-01-01 01:02:03","1"
 1502792101,"3"
 99999,"4"' | $CLICKHOUSE_CLIENT --query="INSERT INTO csv FORMAT CSV";
 
-echo '\N, \N' | $CLICKHOUSE_CLIENT --input_format_null_as_default=1 --query="INSERT INTO csv FORMAT CSV";
+echo '\N, \N' | $CLICKHOUSE_CLIENT --input_format_csv_null_as_default=1 --query="INSERT INTO csv FORMAT CSV";
 
 $CLICKHOUSE_CLIENT --query="SELECT * FROM csv ORDER BY s";
 $CLICKHOUSE_CLIENT --query="DROP TABLE csv";

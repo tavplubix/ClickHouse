@@ -211,7 +211,7 @@ Ok.
 
 Значение по умолчанию: 0.
 
-## input_format_null_as_default {#settings-input_format_null_as_default}
+## input_format_csv_null_as_default {#settings-input_format_csv_null_as_default}
 
 Включает или отключает использование значений по-умолчанию в случаях, когда во входных данных содержится `NULL`, но тип соответствующего столбца не `Nullable(T)` (для фомата CSV).
 

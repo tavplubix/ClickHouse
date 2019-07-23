@@ -67,7 +67,7 @@ private:
     char * pos_of_current_row = nullptr;
     char * pos_of_prev_row = nullptr;
 
-    /// For setting input_format_null_as_default
+    /// For setting input_format_csv_null_as_default
     DataTypes nullable_types;
     MutableColumns nullable_columns;
     OptionalIndexes column_idx_to_nullable_column_idx;

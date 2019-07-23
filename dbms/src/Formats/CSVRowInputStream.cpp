@@ -108,7 +108,7 @@ CSVRowInputStream::CSVRowInputStream(ReadBuffer & istr_, const Block & header_, 
         data_types[i] = column_info.type;
         column_indexes_by_names.emplace(column_info.name, i);
 
-        /// If input_format_null_as_default=1 we need ColumnNullable of type DataTypeNullable(nested_type)
+        /// If input_format_csv_null_as_default=1 we need ColumnNullable of type DataTypeNullable(nested_type)
         /// to parse value as nullable before inserting it in corresponding column of not-nullable type.
         /// Constructing temporary column for each row is slow, so we prepare it here
         if (format_settings.csv.null_as_default && !column_info.type->isNullable() && column_info.type->canBeInsideNullable())
