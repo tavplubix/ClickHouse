@@ -206,6 +206,11 @@ bool CSVRowInputStream::read(MutableColumns & columns, RowReadExtension & ext)
     /// it doesn't have to check it.
     bool have_default_columns = have_always_default_columns;
 
+    std::string old_line;
+    int64_t old_linesize = istr.buffer().end() - pos_of_current_row;
+    if (0 <= old_linesize && old_linesize < 10000)
+        old_line  = std::string(pos_of_current_row, istr.buffer().end() - pos_of_current_row + 4);
+
     const auto delimiter = format_settings.csv.delimiter;
     for (size_t file_column = 0; file_column < column_indexes_for_input_fields.size(); ++file_column)
     {
@@ -213,6 +218,17 @@ bool CSVRowInputStream::read(MutableColumns & columns, RowReadExtension & ext)
         const bool is_last_file_column =
                 file_column + 1 == column_indexes_for_input_fields.size();
 
+
+        std::string line;
+        int64_t linesize = istr.buffer().end() - pos_of_current_row;
+        if (0 <= linesize && linesize < 10000)
+            line  = std::string(pos_of_current_row, istr.buffer().end() - pos_of_current_row + 4);
+        size_t old_avail = istr.available();
+
+        int tmp_case = -1;
+        DataTypePtr tmp_type;
+        bool tmp_at_del = false;
+        bool tmp_line_end = false;
         if (table_column)
         {
             const auto & type = data_types[*table_column];
@@ -221,9 +237,15 @@ bool CSVRowInputStream::read(MutableColumns & columns, RowReadExtension & ext)
                     && (*istr.position() == '\n' || *istr.position() == '\r'
                         || istr.eof());
 
+            tmp_case = 1;
+            tmp_type = type;
+            tmp_at_del = at_delimiter;
+            tmp_line_end = at_last_column_line_end;
+
             if (format_settings.csv.empty_as_default
                     && (at_delimiter || at_last_column_line_end))
             {
+                tmp_case = 2;
                 /// Treat empty unquoted column value as default value, if
                 /// specified in the settings. Tuple columns might seem
                 /// problematic, because they are never quoted but still contain
@@ -235,6 +257,7 @@ bool CSVRowInputStream::read(MutableColumns & columns, RowReadExtension & ext)
             }
             else
             {
+                tmp_case = 3;
                 /// Read the column normally.
                 read_columns[*table_column] = true;
                 skipWhitespacesAndTabs(istr);
@@ -245,12 +268,34 @@ bool CSVRowInputStream::read(MutableColumns & columns, RowReadExtension & ext)
         }
         else
         {
+            tmp_case = 4;
             /// We never read this column from the file, just skip it.
             String tmp;
             readCSVString(tmp, istr, format_settings.csv);
         }
 
-        skipDelimiter(istr, delimiter, is_last_file_column);
+        try
+        {
+            skipDelimiter(istr, delimiter, is_last_file_column);
+        } catch (DB::Exception & e) {
+            std::string msg = "\nCAUGHT " + e.message();
+            msg += "\n col " + std::to_string(file_column) + " " + std::to_string(*table_column);
+            msg += "\n case " + std::to_string(tmp_case);
+            msg += "\n type " + tmp_type->getName();
+            msg += "\n at_del " + std::to_string(tmp_at_del);
+            msg += "\n at_end " + std::to_string(tmp_line_end);
+            msg += "\n offset " + std::to_string(istr.offset());
+            msg += "\n avail " + std::to_string(istr.available());
+            msg += "\n row " + std::to_string(row_num);
+            msg += "\n old_avail " + std::to_string(old_avail);
+            msg += "\n old linesize " + std::to_string(old_linesize);
+            msg += "\n old line \n" + old_line;
+            msg += "\n linesize " + std::to_string(linesize);
+            msg += "\n line \n" + line;
+
+
+            throw DB::Exception(msg, ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     if (have_default_columns)
