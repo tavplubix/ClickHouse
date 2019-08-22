@@ -17,7 +17,9 @@ node2 = cluster.add_instance('node2', macros={'cluster': 'test1'}, main_configs=
 node3 = cluster.add_instance('node3', macros={'cluster': 'test2'}, main_configs=["configs/merge_tree_queue.xml"], with_zookeeper=True)
 node4 = cluster.add_instance('node4', macros={'cluster': 'test2'}, main_configs=["configs/merge_tree_queue.xml"], with_zookeeper=True)
 
-all_nodes = [node1, node2, node3, node4]
+node5 = cluster.add_instance('node5', macros={'cluster': 'test3'}, main_configs=["configs/merge_tree_queue.xml"])
+
+all_nodes = [node1, node2, node3, node4, node5]
 
 @pytest.fixture(scope="module")
 def started_cluster():
@@ -27,8 +29,10 @@ def started_cluster():
         for node in all_nodes:
             node.query("DROP TABLE IF EXISTS test_mutations")
 
-        for node in all_nodes:
+        for node in [node1, node2, node3, node4]:
             node.query("CREATE TABLE test_mutations(d Date, x UInt32, i UInt32) ENGINE ReplicatedMergeTree('/clickhouse/{cluster}/tables/test/test_mutations', '{instance}') ORDER BY x PARTITION BY toYYYYMM(d)")
+
+        node5.query("CREATE TABLE test_mutations(d Date, x UInt32, i UInt32) ENGINE MergeTree() ORDER BY x PARTITION BY toYYYYMM(d)")
 
         yield cluster
 
@@ -56,7 +60,7 @@ class Runner:
 
         self.exceptions = []
 
-    def do_insert(self, thread_num):
+    def do_insert(self, thread_num, partitions_num):
         self.stop_ev.wait(random.random())
 
         # Each thread inserts a small random number of rows with random year, month 01 and day determined
@@ -74,7 +78,7 @@ class Runner:
                 for x in xs:
                     self.currently_inserting_xs[x] += 1
 
-            year = 2000 + random.randint(0, 10)
+            year = 2000 + random.randint(0, partitions_num)
             date_str = '{year}-{month}-{day}'.format(year=year, month=month, day=day)
             payload = ''
             for x in xs:
@@ -139,8 +143,32 @@ class Runner:
 
 
 def wait_for_mutations(nodes, number_of_mutations):
-    for i in range(100):  # wait for replication 80 seconds max
-        time.sleep(0.8)
+    for i in range(100):  # wait for replication 100 seconds max
+        time.sleep(1)
+        print '============================================================================================='
+        print nodes[1].query("select parts_to_do, is_done from system.mutations format Pretty")
+        print nodes[1].query("select partition, count(name), sum(active), sum(active*rows) from system.parts where table ='test_mutations' group by partition format Pretty")
+        print nodes[1].query("select result_part_name, num_parts, thread_number, progress, is_mutation  from system.merges ORDER BY is_mutation, progress format Pretty")
+        print nodes[1].query("""SELECT * FROM (
+    SELECT 'log' AS queue, sum(value LIKE
+           '%merge%') AS merges, sum(value LIKE
+           '%mutate%') AS mutations FROM system.zookeeper WHERE path=
+           '/clickhouse/test1/tables/test/test_mutations/log'
+    UNION ALL
+    SELECT
+           'q1' AS queue, sum(value LIKE
+           '%merge%') AS merges, sum(value LIKE
+           '%mutate%') AS mutations FROM system.zookeeper WHERE path=
+           '/clickhouse/test1/tables/test/test_mutations/replicas/node1/queue'
+    UNION ALL
+    SELECT
+           'q2' AS queue, sum(value LIKE
+           '%merge%') AS merges, sum(value LIKE
+           '%mutate%') AS mutations FROM system.zookeeper WHERE path=
+           '/clickhouse/test1/tables/test/test_mutations/replicas/node2/queue'
+    ) ORDER BY queue FORMAT Pretty""")
+        print nodes[1].query("select * from system.metrics where metric ='BackgroundPoolTask' FORMAT Pretty")
+        #print nodes[0].query("select count(value like '%mut%'), count(value like '%merge%') from system.zookeeper where path='/clickhouse/test2/tables/test/test_mutations/log' and (value like '%mut%' or value like '%merge%') format Pretty")
 
         def get_done_mutations(node):
             return int(node.query("SELECT sum(is_done) FROM system.mutations WHERE table = 'test_mutations'").rstrip())
@@ -158,7 +186,7 @@ def test_mutations(started_cluster):
 
     threads = []
     for thread_num in range(5):
-        threads.append(threading.Thread(target=runner.do_insert, args=(thread_num, )))
+        threads.append(threading.Thread(target=runner.do_insert, args=(thread_num, 10)))
 
     for thread_num in (11, 12, 13):
         threads.append(threading.Thread(target=runner.do_delete, args=(thread_num,)))
@@ -178,7 +206,9 @@ def test_mutations(started_cluster):
 
     all_done = wait_for_mutations(nodes, runner.total_mutations)
 
-    print node1.query("SELECT mutation_id, command, parts_to_do, is_done FROM system.mutations WHERE table = 'test_mutations' FORMAT TSVWithNames")
+    print "Total mutations: ", runner.total_mutations
+    for node in nodes:
+        print node.query("SELECT mutation_id, command, parts_to_do, is_done FROM system.mutations WHERE table = 'test_mutations' FORMAT TSVWithNames")
     assert all_done
 
     expected_sum = runner.total_inserted_xs - runner.total_deleted_xs
@@ -188,24 +218,31 @@ def test_mutations(started_cluster):
         assert actual_sums[i] == expected_sum
 
 
-def test_mutations_dont_prevent_merges(started_cluster):
-    nodes = [node3, node4]
-    for year in range(2000, 2008):
+@pytest.mark.parametrize(
+    ('nodes', ),
+    [
+        ([node5, ], ),          # MergeTree
+        ([node3, node4], ),     # ReplicatedMergeTree
+    ]
+)
+def test_mutations_dont_prevent_merges(started_cluster, nodes):
+    return
+    for year in range(2000, 2016):
         rows = ''
         date_str = '{}-01-{}'.format(year, random.randint(1, 10))
         for i in range(10):
             rows += '{}	{}	{}\n'.format(date_str, random.randint(1, 10), i)
-        node3.query("INSERT INTO test_mutations FORMAT TSV", rows)
+        nodes[0].query("INSERT INTO test_mutations FORMAT TSV", rows)
 
-    # will run mutations of 8 parts in parallel, mutations will sleep for about 20 seconds
-    node3.query("ALTER TABLE test_mutations UPDATE i = sleepEachRow(2) WHERE 1")
+    # will run mutations of 16 parts in parallel, mutations will sleep for about 20 seconds
+    nodes[0].query("ALTER TABLE test_mutations UPDATE i = sleepEachRow(2) WHERE 1")
 
     runner = Runner(nodes)
     threads = []
-    for thread_num in range(10):
-        threads.append(threading.Thread(target=runner.do_insert, args=(thread_num, )))
+    for thread_num in range(2):
+        threads.append(threading.Thread(target=runner.do_insert, args=(thread_num, 0)))
 
-    # will insert approx 4-5 new parts per 1 second into each partition
+    # will insert approx 8-10 new parts per 1 second into one partition
     for t in threads:
         t.start()
 
@@ -215,5 +252,10 @@ def test_mutations_dont_prevent_merges(started_cluster):
     for t in threads:
         t.join()
 
+    for node in nodes:
+        print node.query("SELECT mutation_id, command, parts_to_do, is_done FROM system.mutations WHERE table = 'test_mutations' FORMAT TSVWithNames")
+        print node.query("SELECT partition, count(name), sum(active), sum(active*rows) FROM system.parts WHERE table ='test_mutations' GROUP BY partition FORMAT CSVWithNames")
+
     assert all_done
     assert all([str(e).find("Too many parts") < 0 for e in runner.exceptions])
+
