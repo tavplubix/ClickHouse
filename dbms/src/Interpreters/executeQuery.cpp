@@ -180,7 +180,7 @@ static void onExceptionBeforeStart(const String & query_for_logging, Context & c
 }
 
 
-static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
+static std::tuple<ASTPtr, BlockIO, InterpreterHolder> executeQueryImpl(
     const char * begin,
     const char * end,
     Context & context,
@@ -537,6 +537,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 LOG_DEBUG(&Logger::get("executeQuery"), log_str.str());
             }
         }
+
+        return std::make_tuple(ast, res, interpreter);
     }
     catch (...)
     {
@@ -550,14 +552,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         throw;
     }
-
-    return std::make_tuple(ast, res);
 }
 
 
 BlockIO executeQuery(
     const String & query,
     Context & context,
+    InterpreterHolder & interpreter,
     bool internal,
     QueryProcessingStage::Enum stage,
     bool may_have_embedded_data,
@@ -565,7 +566,7 @@ BlockIO executeQuery(
 {
     ASTPtr ast;
     BlockIO streams;
-    std::tie(ast, streams) = executeQueryImpl(query.data(), query.data() + query.size(), context,
+    std::tie(ast, streams, interpreter) = executeQueryImpl(query.data(), query.data() + query.size(), context,
         internal, stage, !may_have_embedded_data, nullptr, allow_processors);
     if (streams.in)
     {
@@ -622,10 +623,11 @@ void executeQuery(
         may_have_tail = !istr.eof();
     }
 
+    InterpreterHolder interpreter;
     ASTPtr ast;
     BlockIO streams;
 
-    std::tie(ast, streams) = executeQueryImpl(begin, end, context, false, QueryProcessingStage::Complete, may_have_tail, &istr, true);
+    std::tie(ast, streams, interpreter) = executeQueryImpl(begin, end, context, false, QueryProcessingStage::Complete, may_have_tail, &istr, true);
 
     auto & pipeline = streams.pipeline;
 

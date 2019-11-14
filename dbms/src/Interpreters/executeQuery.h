@@ -11,6 +11,9 @@ namespace DB
 class ReadBuffer;
 class WriteBuffer;
 class Context;
+class IInterpreter;
+
+using InterpreterHolder = std::unique_ptr<IInterpreter>;
 
 
 /// Parse and execute a query.
@@ -41,6 +44,7 @@ void executeQuery(
 BlockIO executeQuery(
     const String & query,    /// Query text without INSERT data. The latter must be written to BlockIO::out.
     Context & context,        /// DB, tables, data types, storage engines, functions, aggregate functions...
+    InterpreterHolder & interpreter,     /// Interpreter must be alive until query is finished, because in has Context and StoragePtr, which may used in Streams, returned from executeQuery
     bool internal = false,    /// If true, this query is caused by another query and thus needn't be registered in the ProcessList.
     QueryProcessingStage::Enum stage = QueryProcessingStage::Complete,    /// To which stage the query must be executed.
     bool may_have_embedded_data = false, /// If insert query may have embedded data
@@ -51,6 +55,7 @@ BlockIO executeQuery(
 QueryPipeline executeQueryWithProcessors(
     const String & query,    /// Query text without INSERT data. The latter must be written to BlockIO::out.
     Context & context,        /// DB, tables, data types, storage engines, functions, aggregate functions...
+    InterpreterHolder & interpreter,     /// Interpreter must be alive until query is finished, because in has Context and StoragePtr, which may used in Processors, returned from executeQuery
     bool internal = false,    /// If true, this query is caused by another query and thus needn't be registered in the ProcessList.
     QueryProcessingStage::Enum stage = QueryProcessingStage::Complete,    /// To which stage the query must be executed.
     bool may_have_embedded_data = false /// If insert query may have embedded data
