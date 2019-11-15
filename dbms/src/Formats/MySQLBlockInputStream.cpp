@@ -21,8 +21,10 @@ namespace ErrorCodes
 
 
 MySQLBlockInputStream::MySQLBlockInputStream(
-    const mysqlxx::PoolWithFailover::Entry & entry_, const std::string & query_str, const Block & sample_block, const UInt64 max_block_size_, const bool auto_close_)
-    : entry{entry_}, query{this->entry->query(query_str)}, result{query.use()}, max_block_size{max_block_size_}, auto_close{auto_close_}
+        SharedPoolOrEntryFromPoolWithFilover pool_or_entry, const std::string & query_str, const Block & sample_block, const UInt64 max_block_size_, const bool auto_close_)
+    : pool{pool_or_entry.index() == 0 ? std::get<0>(pool_or_entry) : nullptr},
+      entry{pool_or_entry.index() == 0 ? pool->Get() : std::get<1>(pool_or_entry)},
+      query{this->entry->query(query_str)}, result{query.use()}, max_block_size{max_block_size_}, auto_close{auto_close_}
 {
     if (sample_block.columns() != result.getNumFields())
         throw Exception{"mysqlxx::UseQueryResult contains " + toString(result.getNumFields()) + " columns while "

@@ -23,7 +23,7 @@ public:
     StorageMySQL(
         const std::string & database_name_,
         const std::string & table_name_,
-        mysqlxx::Pool && pool_,
+        std::shared_ptr<mysqlxx::Pool> pool_,
         const std::string & remote_database_name_,
         const std::string & remote_table_name_,
         const bool replace_query_,
@@ -56,7 +56,7 @@ private:
     bool replace_query;
     std::string on_duplicate_clause;
 
-    mysqlxx::Pool pool;
+    std::shared_ptr<mysqlxx::Pool> pool;
     Context global_context;
 };
 

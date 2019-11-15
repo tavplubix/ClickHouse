@@ -50,9 +50,9 @@ DatabaseMySQL::DatabaseMySQL(
     const Context & context_, const String & database_name_, const String & mysql_host_name_, const UInt16 & mysql_port_,
     const String & mysql_database_name_, const String & mysql_user_name_, const String & mysql_user_password_)
     : global_context(context_), database_name(database_name_), mysql_host_name(mysql_host_name_), mysql_port(mysql_port_),
-      mysql_database_name(mysql_database_name_), mysql_user_name(mysql_user_name_), mysql_user_password(mysql_user_password_),
-      mysql_pool(mysql_database_name, mysql_host_name, mysql_user_name, mysql_user_password, mysql_port)
+      mysql_database_name(mysql_database_name_), mysql_user_name(mysql_user_name_), mysql_user_password(mysql_user_password_)
 {
+    mysql_pool = std::make_shared<mysqlxx::Pool>(mysql_database_name, mysql_host_name, mysql_user_name, mysql_user_password, mysql_port);
 }
 
 bool DatabaseMySQL::empty(const Context &) const
@@ -230,7 +230,7 @@ DatabaseMySQL::MySQLStorageInfo DatabaseMySQL::createStorageInfo(
     const String & table_name, const NamesAndTypesList & columns_name_and_type, const UInt64 & table_modification_time) const
 {
     const auto & mysql_table = StorageMySQL::create(
-        database_name, table_name, std::move(mysql_pool), mysql_database_name, table_name,
+        database_name, table_name, mysql_pool, mysql_database_name, table_name,
         false, "", ColumnsDescription{columns_name_and_type}, ConstraintsDescription{}, global_context);
 
     const auto & create_table_query = std::make_shared<ASTCreateQuery>();
@@ -265,7 +265,7 @@ std::map<String, UInt64> DatabaseMySQL::fetchTablesWithModificationTime() const
              " WHERE TABLE_SCHEMA = " << quote << mysql_database_name;
 
     std::map<String, UInt64> tables_with_modification_time;
-    MySQLBlockInputStream result(mysql_pool.Get(), query.str(), tables_status_sample_block, DEFAULT_BLOCK_SIZE);
+    MySQLBlockInputStream result(mysql_pool, query.str(), tables_status_sample_block, DEFAULT_BLOCK_SIZE);
 
     while (Block block = result.read())
     {
@@ -310,7 +310,7 @@ std::map<String, NamesAndTypesList> DatabaseMySQL::fetchTablesColumnsList(const 
           << " AND TABLE_NAME IN " << toQueryStringWithQuote(tables_name) << " ORDER BY ORDINAL_POSITION";
 
     const auto & external_table_functions_use_nulls = global_context.getSettings().external_table_functions_use_nulls;
-    MySQLBlockInputStream result(mysql_pool.Get(), query.str(), tables_columns_sample_block, DEFAULT_BLOCK_SIZE);
+    MySQLBlockInputStream result(mysql_pool, query.str(), tables_columns_sample_block, DEFAULT_BLOCK_SIZE);
     while (Block block = result.read())
     {
         size_t rows = block.rows();

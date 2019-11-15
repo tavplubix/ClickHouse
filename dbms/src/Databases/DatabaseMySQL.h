@@ -126,7 +126,7 @@ private:
     std::atomic<bool> quit{false};
     std::condition_variable cond;
 
-    mutable mysqlxx::Pool mysql_pool;
+    mutable std::shared_ptr<mysqlxx::Pool> mysql_pool;
     mutable std::vector<StoragePtr> outdated_tables;
     mutable std::map<String, MySQLStorageInfo> local_tables_cache;
 

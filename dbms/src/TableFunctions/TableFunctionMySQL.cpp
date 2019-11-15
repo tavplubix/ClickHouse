@@ -74,7 +74,7 @@ StoragePtr TableFunctionMySQL::executeImpl(const ASTPtr & ast_function, const Co
     /// 3306 is the default MySQL port number
     auto parsed_host_port = parseAddress(host_port, 3306);
 
-    mysqlxx::Pool pool(remote_database_name, parsed_host_port.first, user_name, password, parsed_host_port.second);
+    auto pool = std::make_shared<mysqlxx::Pool>(remote_database_name, parsed_host_port.first, user_name, password, parsed_host_port.second);
 
     /// Determine table definition by running a query to INFORMATION_SCHEMA.
 
@@ -100,7 +100,7 @@ StoragePtr TableFunctionMySQL::executeImpl(const ASTPtr & ast_function, const Co
         << " ORDER BY ORDINAL_POSITION";
 
     NamesAndTypesList columns;
-    MySQLBlockInputStream result(pool.Get(), query.str(), sample_block, DEFAULT_BLOCK_SIZE);
+    MySQLBlockInputStream result(pool, query.str(), sample_block, DEFAULT_BLOCK_SIZE);
     while (Block block = result.read())
     {
         size_t rows = block.rows();

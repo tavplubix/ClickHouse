@@ -270,29 +270,29 @@ BlockInputStreams StorageFile::read(
 class StorageFileBlockOutputStream : public IBlockOutputStream
 {
 public:
-    explicit StorageFileBlockOutputStream(StorageFile & storage_)
-        : storage(storage_), lock(storage.rwlock)
+    explicit StorageFileBlockOutputStream(std::shared_ptr<StorageFile> storage_)
+        : storage(storage_), lock(storage->rwlock)
     {
-        if (storage.use_table_fd)
+        if (storage->use_table_fd)
         {
             /** NOTE: Using real file binded to FD may be misleading:
               * SELECT *; INSERT insert_data; SELECT *; last SELECT returns initil_fd_data + insert_data
               * INSERT data; SELECT *; last SELECT returns only insert_data
               */
-            storage.table_fd_was_used = true;
-            write_buf = std::make_unique<WriteBufferFromFileDescriptor>(storage.table_fd);
+            storage->table_fd_was_used = true;
+            write_buf = std::make_unique<WriteBufferFromFileDescriptor>(storage->table_fd);
         }
         else
         {
-            if (storage.paths.size() != 1)
-                throw Exception("Table '" + storage.table_name + "' is in readonly mode because of globs in filepath", ErrorCodes::DATABASE_ACCESS_DENIED);
-            write_buf = std::make_unique<WriteBufferFromFile>(storage.paths[0], DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT);
+            if (storage->paths.size() != 1)
+                throw Exception("Table '" + storage->table_name + "' is in readonly mode because of globs in filepath", ErrorCodes::DATABASE_ACCESS_DENIED);
+            write_buf = std::make_unique<WriteBufferFromFile>(storage->paths[0], DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_APPEND | O_CREAT);
         }
 
-        writer = FormatFactory::instance().getOutput(storage.format_name, *write_buf, storage.getSampleBlock(), storage.context_global);
+        writer = FormatFactory::instance().getOutput(storage->format_name, *write_buf, storage->getSampleBlock(), storage->context_global);
     }
 
-    Block getHeader() const override { return storage.getSampleBlock(); }
+    Block getHeader() const override { return storage->getSampleBlock(); }
 
     void write(const Block & block) override
     {
@@ -315,7 +315,7 @@ public:
     }
 
 private:
-    StorageFile & storage;
+    std::shared_ptr<StorageFile> storage;
     std::unique_lock<std::shared_mutex> lock;
     std::unique_ptr<WriteBufferFromFileDescriptor> write_buf;
     BlockOutputStreamPtr writer;
@@ -325,7 +325,7 @@ BlockOutputStreamPtr StorageFile::write(
     const ASTPtr & /*query*/,
     const Context & /*context*/)
 {
-    return std::make_shared<StorageFileBlockOutputStream>(*this);
+    return std::make_shared<StorageFileBlockOutputStream>(std::static_pointer_cast<StorageFile>(shared_from_this()));
 }
 
 Strings StorageFile::getDataPaths() const

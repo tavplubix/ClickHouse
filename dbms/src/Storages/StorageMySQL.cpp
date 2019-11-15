@@ -39,7 +39,7 @@ String backQuoteMySQL(const String & x)
 StorageMySQL::StorageMySQL(
     const std::string & database_name_,
     const std::string & table_name_,
-    mysqlxx::Pool && pool_,
+    std::shared_ptr<mysqlxx::Pool> pool_,
     const std::string & remote_database_name_,
     const std::string & remote_table_name_,
     const bool replace_query_,
@@ -80,27 +80,26 @@ BlockInputStreams StorageMySQL::read(
         sample_block.insert({ column_data.type, column_data.name });
     }
 
-    return { std::make_shared<MySQLBlockInputStream>(pool.Get(), query, sample_block, max_block_size_) };
+    return { std::make_shared<MySQLBlockInputStream>(pool, query, sample_block, max_block_size_) };
 }
 
 
 class StorageMySQLBlockOutputStream : public IBlockOutputStream
 {
 public:
-    explicit StorageMySQLBlockOutputStream(const StorageMySQL & storage_,
+    explicit StorageMySQLBlockOutputStream(std::shared_ptr<StorageMySQL> storage_,
         const std::string & remote_database_name_,
         const std::string & remote_table_name_,
-        const mysqlxx::PoolWithFailover::Entry & entry_,
         const size_t & mysql_max_rows_to_insert)
         : storage{storage_}
         , remote_database_name{remote_database_name_}
         , remote_table_name{remote_table_name_}
-        , entry{entry_}
+        , entry{storage->pool->Get()}
         , max_batch_rows{mysql_max_rows_to_insert}
     {
     }
 
-    Block getHeader() const override { return storage.getSampleBlock(); }
+    Block getHeader() const override { return storage->getSampleBlock(); }
 
     void write(const Block & block) override
     {
@@ -124,15 +123,15 @@ public:
     void writeBlockData(const Block & block)
     {
         WriteBufferFromOwnString sqlbuf;
-        sqlbuf << (storage.replace_query ? "REPLACE" : "INSERT") << " INTO ";
+        sqlbuf << (storage->replace_query ? "REPLACE" : "INSERT") << " INTO ";
         sqlbuf << backQuoteMySQL(remote_database_name) << "." << backQuoteMySQL(remote_table_name);
         sqlbuf << " (" << dumpNamesWithBackQuote(block) << ") VALUES ";
 
-        auto writer = FormatFactory::instance().getOutput("Values", sqlbuf, storage.getSampleBlock(), storage.global_context);
+        auto writer = FormatFactory::instance().getOutput("Values", sqlbuf, storage->getSampleBlock(), storage->global_context);
         writer->write(block);
 
-        if (!storage.on_duplicate_clause.empty())
-            sqlbuf << " ON DUPLICATE KEY " << storage.on_duplicate_clause;
+        if (!storage->on_duplicate_clause.empty())
+            sqlbuf << " ON DUPLICATE KEY " << storage->on_duplicate_clause;
 
         sqlbuf << ";";
 
@@ -184,7 +183,7 @@ public:
 
 
 private:
-    const StorageMySQL & storage;
+    std::shared_ptr<StorageMySQL> storage;
     std::string remote_database_name;
     std::string remote_table_name;
     mysqlxx::PoolWithFailover::Entry entry;
@@ -195,7 +194,7 @@ private:
 BlockOutputStreamPtr StorageMySQL::write(
     const ASTPtr & /*query*/, const Context & context)
 {
-    return std::make_shared<StorageMySQLBlockOutputStream>(*this, remote_database_name, remote_table_name, pool.Get(), context.getSettingsRef().mysql_max_rows_to_insert);
+    return std::make_shared<StorageMySQLBlockOutputStream>(std::static_pointer_cast<StorageMySQL>(shared_from_this()), remote_database_name, remote_table_name, context.getSettingsRef().mysql_max_rows_to_insert);
 }
 
 void registerStorageMySQL(StorageFactory & factory)
@@ -220,7 +219,7 @@ void registerStorageMySQL(StorageFactory & factory)
         const String & username = engine_args[3]->as<ASTLiteral &>().value.safeGet<String>();
         const String & password = engine_args[4]->as<ASTLiteral &>().value.safeGet<String>();
 
-        mysqlxx::Pool pool(remote_database, parsed_host_port.first, username, password, parsed_host_port.second);
+        auto pool = std::make_shared<mysqlxx::Pool>(remote_database, parsed_host_port.first, username, password, parsed_host_port.second);
 
         bool replace_query = false;
         std::string on_duplicate_clause;
