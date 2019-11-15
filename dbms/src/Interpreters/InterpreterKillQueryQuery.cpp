@@ -9,10 +9,7 @@
 #include <Columns/ColumnString.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeString.h>
-#include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataStreams/OneBlockInputStream.h>
-#include <Storages/IStorage.h>
 #include <thread>
 #include <iostream>
 #include <cstddef>
@@ -265,7 +262,8 @@ Block InterpreterKillQueryQuery::getSelectResult(const String & columns, const S
     if (where_expression)
         select_query += " WHERE " + queryToString(where_expression);
 
-    BlockIO block_io = executeQuery(select_query, context, true, QueryProcessingStage::Complete, false, false);
+    InterpreterHolder interpreter;
+    BlockIO block_io = executeQuery(select_query, context, interpreter, true, QueryProcessingStage::Complete, false, false);
     Block res = block_io.in->read();
 
     if (res && block_io.in->read())

@@ -74,7 +74,8 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
 
 BlockIO InterpreterShowTablesQuery::execute()
 {
-    return executeQuery(getRewrittenQuery(), context, true);
+    InterpreterHolder interpreter; //FIXME
+    return executeQuery(getRewrittenQuery(), context, interpreter, true);
 }
 
 

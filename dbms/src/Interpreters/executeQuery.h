@@ -5,13 +5,14 @@
 
 #include <Processors/QueryPipeline.h>
 
+#include <Interpreters/IInterpreter.h>
+
 namespace DB
 {
 
 class ReadBuffer;
 class WriteBuffer;
 class Context;
-class IInterpreter;
 
 using InterpreterHolder = std::unique_ptr<IInterpreter>;
 

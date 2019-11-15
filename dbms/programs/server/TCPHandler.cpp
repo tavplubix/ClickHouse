@@ -164,6 +164,7 @@ void TCPHandler::runImpl()
 
         bool send_exception_with_stack_trace = connection_context.getSettingsRef().calculate_text_stack_trace;
 
+        InterpreterHolder interpreter;
         try
         {
             /// If a user passed query-local timeouts, reset socket to initial state at the end of the query
@@ -244,7 +245,7 @@ void TCPHandler::runImpl()
 
             bool may_have_embedded_data = client_revision >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
             /// Processing Query
-            state.io = executeQuery(state.query, *query_context, false, state.stage, may_have_embedded_data);
+            state.io = executeQuery(state.query, *query_context, interpreter, false, state.stage, may_have_embedded_data);
 
             if (state.io.out)
                 state.need_receive_data_for_insert = true;

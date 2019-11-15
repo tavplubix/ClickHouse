@@ -310,7 +310,7 @@ static std::tuple<ASTPtr, BlockIO, InterpreterHolder> executeQueryImpl(
             /// reset Input callbacks if query is not INSERT SELECT
             context.resetInputCallbacks();
 
-        auto interpreter = InterpreterFactory::get(ast, context, stage);
+        InterpreterHolder interpreter = InterpreterFactory::get(ast, context, stage);
         bool use_processors = settings.experimental_use_processors && allow_processors && interpreter->canExecuteWithProcessors();
 
         if (use_processors)
@@ -538,7 +538,7 @@ static std::tuple<ASTPtr, BlockIO, InterpreterHolder> executeQueryImpl(
             }
         }
 
-        return std::make_tuple(ast, res, interpreter);
+        return std::make_tuple(ast, res, std::move(interpreter));
     }
     catch (...)
     {

@@ -12,7 +12,8 @@ namespace DB
 
 BlockIO InterpreterShowProcesslistQuery::execute()
 {
-    return executeQuery("SELECT * FROM system.processes", context, true);
+    InterpreterHolder interpreter; //FIXME
+    return executeQuery("SELECT * FROM system.processes", context, interpreter, true);
 }
 
 }

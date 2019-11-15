@@ -124,16 +124,18 @@ BlockInputStreamPtr ClickHouseDictionarySource::loadAll()
     /** Query to local ClickHouse is marked internal in order to avoid
       *    the necessity of holding process_list_element shared pointer.
       */
+    InterpreterHolder interpreter; //FIXME
     if (is_local)
-        return executeQuery(load_all_query, context, true).in;
+        return executeQuery(load_all_query, context, interpreter, true).in;
     return std::make_shared<RemoteBlockInputStream>(pool, load_all_query, sample_block, context);
 }
 
 BlockInputStreamPtr ClickHouseDictionarySource::loadUpdatedAll()
 {
     std::string load_update_query = getUpdateFieldAndDate();
+    InterpreterHolder interpreter; //FIXME
     if (is_local)
-        return executeQuery(load_update_query, context, true).in;
+        return executeQuery(load_update_query, context, interpreter, true).in;
     return std::make_shared<RemoteBlockInputStream>(pool, load_update_query, sample_block, context);
 }
 
@@ -175,8 +177,9 @@ std::string ClickHouseDictionarySource::toString() const
 
 BlockInputStreamPtr ClickHouseDictionarySource::createStreamForSelectiveLoad(const std::string & query)
 {
+    InterpreterHolder interpreter; //FIXME
     if (is_local)
-        return executeQuery(query, context, true).in;
+        return executeQuery(query, context, interpreter, true).in;
 
     return std::make_shared<RemoteBlockInputStream>(pool, query, sample_block, context);
 }
@@ -186,8 +189,9 @@ std::string ClickHouseDictionarySource::doInvalidateQuery(const std::string & re
     LOG_TRACE(log, "Performing invalidate query");
     if (is_local)
     {
-        Context query_context = context;
-        auto input_block = executeQuery(request, query_context, true).in;
+        InterpreterHolder interpreter; //FIXME
+        Context query_context = context; //FIXME
+        auto input_block = executeQuery(request, query_context, interpreter, true).in;
         return readInvalidateQuery(*input_block);
     }
     else
