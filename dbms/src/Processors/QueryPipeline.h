@@ -78,6 +78,7 @@ public:
     void addTableLock(const TableStructureReadLockHolder & lock) { table_locks.push_back(lock); }
     void addInterpreterContext(std::shared_ptr<Context> context) { interpreter_context.emplace_back(std::move(context)); }
     void addStorageHolder(StoragePtr storage) { storage_holder.emplace_back(std::move(storage)); }
+    //void moveHolders(QueryPipeline & from_pipeline);
 
     /// For compatibility with IBlockInputStream.
     void setProgressCallback(const ProgressCallback & callback);
