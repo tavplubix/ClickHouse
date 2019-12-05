@@ -76,7 +76,7 @@ public:
     {
         if (no_destination)
             return false;
-        auto dest = global_context.tryGetTable(destination_database, destination_table);
+        auto dest = global_context.tryGetTable(StorageID(destination_database, destination_table)); //FIXME
         if (dest && dest.get() != this)
             return dest->supportsPrewhere();
         return false;

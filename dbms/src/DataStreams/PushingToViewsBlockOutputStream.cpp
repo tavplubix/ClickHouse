@@ -46,7 +46,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
 
     for (const auto & database_table : dependencies)
     {
-        auto dependent_table = context.getTable(database_table.database_name, database_table.table_name);   //FIXME
+        auto dependent_table = context.getTable(database_table);
 
         ASTPtr query;
         BlockOutputStreamPtr out;

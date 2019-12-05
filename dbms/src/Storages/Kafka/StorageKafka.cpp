@@ -299,7 +299,7 @@ bool StorageKafka::checkDependencies(const StorageID & table_id)
     // Check the dependencies are ready?
     for (const auto & db_tab : dependencies)
     {
-        auto table = global_context.tryGetTable(db_tab.database_name, db_tab.table_name);   //FIXME
+        auto table = global_context.tryGetTable(db_tab);
         if (!table)
             return false;
 
