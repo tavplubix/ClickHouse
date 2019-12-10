@@ -233,9 +233,11 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
                 << what << " "
                 << (if_not_exists ? "IF NOT EXISTS " : "")
             << (settings.hilite ? hilite_none : "")
-            << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table)
-            << (!uuid.empty() ? " UUID " + quoteString(uuid) : "");
-            formatOnCluster(settings);
+            << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
+        if (!uuid.empty())
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " UUID " << (settings.hilite ? hilite_none : "")
+                          << quoteString(uuid);
+        formatOnCluster(settings);
     }
     else
     {
@@ -250,11 +252,14 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " AS " << (settings.hilite ? hilite_none : "");
         as_table_function->formatImpl(settings, state, frame);
     }
-    if (!to_table.empty())
+    if (!to_table_id.empty())
     {
         settings.ostr
-            << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
-            << (!to_database.empty() ? backQuoteIfNeed(to_database) + "." : "") << backQuoteIfNeed(to_table);
+            << (settings.hilite ? hilite_keyword : "") << (to_custom_table ? " TO " : " TO INNER TABLE ") << (settings.hilite ? hilite_none : "")
+            << to_table_id.getFullTableName();
+        if (!to_table_id.uuid.empty())
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " UUID " << (settings.hilite ? hilite_none : "")
+                          << quoteString(to_table_id.uuid);
     }
 
     if (!as_table.empty())

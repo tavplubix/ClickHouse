@@ -66,10 +66,8 @@ public:
     Strings getDataPaths() const override;
 
 private:
-    String select_database_name;
-    String select_table_name;
-    String target_database_name;
-    String target_table_name;
+    StorageID select_table_id;
+    StorageID target_table_id;
     ASTPtr inner_query;
     Context & global_context;
     bool has_inner_table = false;

@@ -156,10 +156,11 @@ void DatabaseOrdinary::loadStoredObjects(
 
     for (const auto & name_with_query : file_names)
     {
-        pool.scheduleOrThrowOnError([&]() { loadOneObject(name_with_query.second->as<const ASTCreateQuery &>()); });
+        //pool.scheduleOrThrowOnError([&]() { loadOneObject(name_with_query.second->as<const ASTCreateQuery &>()); });
+        loadOneObject(name_with_query.second->as<const ASTCreateQuery &>());
     }
 
-    pool.wait();
+    //pool.wait();
 
     /// After all tables was basically initialized, startup them.
     startupTables(pool);
@@ -248,7 +249,7 @@ void DatabaseOrdinary::alterTable(
     if (storage_modifier)
         storage_modifier(*ast_create_query.storage);
 
-    statement = getObjectDefinitionFromCreateQuery(ast);
+    statement = getObjectDefinitionFromCreateQuery(ast, context);
 
     {
         WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);

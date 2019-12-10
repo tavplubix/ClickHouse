@@ -4,6 +4,7 @@
 #include <IO/WriteBufferFromOStream.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/IdentifierSemantic.h>
+#include <Common/quoteString.h>
 
 
 namespace DB
@@ -92,6 +93,12 @@ void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, Form
     else
     {
         format_element(name);
+    }
+
+    if (!uuid.empty())
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " UUID " << (settings.hilite ? hilite_none : "")
+                      << quoteString(uuid);
     }
 }
 

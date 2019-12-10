@@ -24,6 +24,7 @@ DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTIdentifier & ident
     std::tie(database, table) = IdentifierSemantic::extractDatabaseAndTable(identifier);
     if (database.empty())
         database = current_database;
+    uuid = identifier.uuid;
 }
 
 DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTPtr & node, const String & current_database)

@@ -22,7 +22,7 @@ std::pair<String, StoragePtr> createTableFromAST(
   * It is an ATTACH query that you can execute to create a table from the correspondent database.
   * See the implementation.
   */
-String getObjectDefinitionFromCreateQuery(const ASTPtr & query);
+String getObjectDefinitionFromCreateQuery(const ASTPtr & query, const Context & context);
 
 
 /* Class to provide basic operations with tables when metadata is stored on disk in .sql files.

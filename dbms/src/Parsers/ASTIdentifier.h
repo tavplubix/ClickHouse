@@ -20,6 +20,7 @@ public:
     /// The composite identifier will have a concatenated name (of the form a.b.c),
     /// and individual components will be available inside the name_parts.
     String name;
+    String uuid;
 
     ASTIdentifier(const String & name_, std::vector<String> && name_parts_ = {});
     ASTIdentifier(std::vector<String> && name_parts_);

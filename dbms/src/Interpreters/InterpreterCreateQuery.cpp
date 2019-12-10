@@ -548,8 +548,8 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     if (!create.cluster.empty())
     {
         NameSet databases{create.database};
-        if (!create.to_table.empty())
-            databases.emplace(create.to_database);
+        if (!create.to_table_id.table_name.empty())
+            databases.emplace(create.to_table_id.database_name);
 
         /// NOTE: if it's CREATE query and create.database is DatabaseAtomic, different UUIDs will be generated on all servers.
         /// However, it allows to use UUID as replica name.
@@ -577,12 +577,12 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     String current_database = context.getCurrentDatabase();
     if (create.database.empty())
         create.database = current_database;
-    if (create.to_database.empty())
-        create.to_database = current_database;
+    if (create.to_custom_table && (create.to_table_id.database_name.empty() || create.to_table_id.uuid.empty()))
+        create.to_table_id = context.getTable(create.to_table_id.database_name, create.to_table_id.table_name)->getStorageID();
 
     if (create.select && (create.is_view || create.is_materialized_view || create.is_live_view))
     {
-        AddDefaultDatabaseVisitor visitor(current_database);
+        AddUUIDAndDefaultDatabaseVisitor visitor(current_database, nullptr, &context);
         visitor.visit(*create.select);
     }
 

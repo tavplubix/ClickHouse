@@ -136,7 +136,7 @@ QueryProcessingStage::Enum StorageBuffer::getQueryProcessingStage(const Context 
 {
     if (!no_destination)
     {
-        auto destination = context.getTable(destination_database, destination_table);
+        auto destination = context.getTable(StorageID(destination_database, destination_table)); //FIXME
 
         if (destination.get() == this)
             throw Exception("Destination table is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
@@ -159,7 +159,7 @@ BlockInputStreams StorageBuffer::read(
 
     if (!no_destination)
     {
-        auto destination = context.getTable(destination_database, destination_table);
+        auto destination = context.getTable(StorageID(destination_database, destination_table)); //FIXME
 
         if (destination.get() == this)
             throw Exception("Destination table is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
@@ -333,7 +333,7 @@ public:
         StoragePtr destination;
         if (!storage.no_destination)
         {
-            destination = storage.global_context.tryGetTable(storage.destination_database, storage.destination_table);
+            destination = storage.global_context.tryGetTable(StorageID(storage.destination_database, storage.destination_table)); //FIXME
             if (destination.get() == &storage)
                 throw Exception("Destination table is myself. Write will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
         }
@@ -430,7 +430,7 @@ bool StorageBuffer::mayBenefitFromIndexForIn(const ASTPtr & left_in_operand, con
     if (no_destination)
         return false;
 
-    auto destination = global_context.getTable(destination_database, destination_table);
+    auto destination = global_context.getTable(StorageID(destination_database, destination_table)); //FIXME
 
     if (destination.get() == this)
         throw Exception("Destination table is myself. Read will cause infinite loop.", ErrorCodes::INFINITE_LOOP);
@@ -597,7 +597,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds, bool loc
         */
     try
     {
-        writeBlockToDestination(block_to_write, global_context.tryGetTable(destination_database, destination_table));
+        writeBlockToDestination(block_to_write, global_context.tryGetTable(StorageID(destination_database, destination_table))); //FIXME
     }
     catch (...)
     {

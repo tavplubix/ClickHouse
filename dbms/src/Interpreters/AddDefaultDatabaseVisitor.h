@@ -2,6 +2,7 @@
 
 #include <Common/typeid_cast.h>
 #include <Parsers/ASTQueryWithTableAndOutput.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -17,16 +18,19 @@ namespace DB
 {
 
 /// Visitors consist of functions with unified interface 'void visit(Casted & x, ASTPtr & y)', there x is y, successfully casted to Casted.
-/// Both types and fuction could have const specifiers. The second argument is used by visitor to replaces AST node (y) if needed.
+/// Both types and function could have const specifiers. The second argument is used by visitor to replaces AST node (y) if needed.
 
 /// Visits AST nodes, add default database to tables if not set. There's different logic for DDLs and selects.
-class AddDefaultDatabaseVisitor
+
+template<bool add_default_db, bool add_uuid, bool remove_name>
+class RewriteStorageIDVisitor
 {
 public:
-    AddDefaultDatabaseVisitor(const String & database_name_, std::ostream * ostr_ = nullptr)
+    RewriteStorageIDVisitor(const String & database_name_, std::ostream * ostr_ = nullptr, const Context * context_ = nullptr)
     :   database_name(database_name_),
         visit_depth(0),
-        ostr(ostr_)
+        ostr(ostr_),
+        context(context_)
     {}
 
     void visitDDL(ASTPtr & ast) const
@@ -62,6 +66,7 @@ private:
     const String database_name;
     mutable size_t visit_depth;
     std::ostream * ostr;
+    const Context * context;
 
     void visit(ASTSelectWithUnionQuery & select, ASTPtr &) const
     {
@@ -100,8 +105,32 @@ private:
     /// @note It expects that only table (not column) identifiers are visited.
     void visit(const ASTIdentifier & identifier, ASTPtr & ast) const
     {
-        if (!identifier.compound())
-            ast = createTableIdentifier(database_name, identifier.name);
+        if constexpr (add_default_db)
+        {
+            if (!identifier.compound())
+            {
+                auto uuid = identifier.uuid;
+                ast = createTableIdentifier(database_name, identifier.name);
+                ast->as<ASTIdentifier &>().uuid = uuid;
+            }
+        }
+        if constexpr (add_uuid)
+        {
+            auto & id = ast->as<ASTIdentifier &>();
+            if (id.uuid.empty())
+            {
+                DatabaseAndTableWithAlias names(id);
+                //TODO easier way to get uuid by db and table names
+                id.uuid = context->getTable(names.database, names.table)->getStorageID().uuid;
+            }
+        }
+        if constexpr (remove_name)
+        {
+            /// Replace table name with placeholder if there is table name
+            auto & id = ast->as<ASTIdentifier &>();
+            if (!id.uuid.empty())
+                id.setShortName(TABLE_WITH_UUID_NAME_PLACEHOLDER);
+        }
     }
 
     void visit(ASTSubquery & subquery, ASTPtr &) const
@@ -164,8 +193,33 @@ private:
 
     void visitDDL(ASTQueryWithTableAndOutput & node, ASTPtr &) const
     {
-        if (node.database.empty())
-            node.database = database_name;
+        if constexpr (add_default_db)
+        {
+            if (node.database.empty())
+                node.database = database_name;
+        }
+        if constexpr (add_uuid)
+        {
+            if (auto create = typeid_cast<ASTCreateQuery *>(&node))
+            {
+                if (create->is_materialized_view && create->to_table_id.uuid.empty())
+                    create->to_table_id.uuid = context->getTable(node.database, node.table)->getStorageID().uuid;
+            }
+            else if (node.uuid.empty()) /// Do not try to get UUID for CREATE query
+                    node.uuid = context->getTable(node.database, node.table)->getStorageID().uuid;
+        }
+        if constexpr (remove_name)
+        {
+            if (node.uuid.empty())
+                return;
+            node.database.clear();
+            node.table = TABLE_WITH_UUID_NAME_PLACEHOLDER;
+            if (auto create = typeid_cast<ASTCreateQuery *>(&node))
+            {
+                create->to_table_id.database_name.clear();
+                create->to_table_id.table_name = TABLE_WITH_UUID_NAME_PLACEHOLDER;
+            }
+        }
     }
 
     void visitDDL(ASTRenameQuery & node, ASTPtr &) const
@@ -196,5 +250,9 @@ private:
         return false;
     }
 };
+
+using AddDefaultDatabaseVisitor = RewriteStorageIDVisitor<true, false, false>;
+using AddUUIDAndDefaultDatabaseVisitor = RewriteStorageIDVisitor<true, true, false>;
+using ReplaceTableNameWithUUIDVisitor = RewriteStorageIDVisitor<false, true, true>;
 
 }

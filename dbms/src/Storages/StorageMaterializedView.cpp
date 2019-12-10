@@ -34,26 +34,22 @@ static inline String generateInnerTableName(const String & table_name)
     return ".inner." + table_name;
 }
 
-static void extractDependentTable(ASTSelectQuery & query, String & select_database_name, String & select_table_name)
+static StorageID extractDependentTable(ASTSelectQuery & query, Context * context, bool need_visitor = true)
 {
+    if (need_visitor)
+    {
+        AddUUIDAndDefaultDatabaseVisitor visitor(context->getCurrentDatabase(), nullptr, context);
+        visitor.visit(query);
+    }
     auto db_and_table = getDatabaseAndTable(query, 0);
     ASTPtr subquery = extractTableExpression(query, 0);
 
     if (!db_and_table && !subquery)
-        return;
+        return {};  //FIXME
 
     if (db_and_table)
     {
-        select_table_name = db_and_table->table;
-
-        if (db_and_table->database.empty())
-        {
-            db_and_table->database = select_database_name;
-            AddDefaultDatabaseVisitor visitor(select_database_name);
-            visitor.visit(query);
-        }
-        else
-            select_database_name = db_and_table->database;
+        return StorageID(db_and_table->database, db_and_table->table, db_and_table->uuid);
     }
     else if (auto * ast_select = subquery->as<ASTSelectWithUnionQuery>())
     {
@@ -62,7 +58,7 @@ static void extractDependentTable(ASTSelectQuery & query, String & select_databa
 
         auto & inner_query = ast_select->list_of_selects->children.at(0);
 
-        extractDependentTable(inner_query->as<ASTSelectQuery &>(), select_database_name, select_table_name);
+        return extractDependentTable(inner_query->as<ASTSelectQuery &>(), context, false);
     }
     else
         throw Exception("Logical error while creating StorageMaterializedView."
@@ -105,47 +101,36 @@ StorageMaterializedView::StorageMaterializedView(
     if (!query.select)
         throw Exception("SELECT query is not specified for " + getName(), ErrorCodes::INCORRECT_QUERY);
 
-    if (!query.storage && query.to_table.empty())
+    /// If the destination table is not set, use inner table
+    has_inner_table = !query.to_custom_table;
+    if (has_inner_table && !query.storage)
         throw Exception(
             "You must specify where to save results of a MaterializedView query: either ENGINE or an existing table in a TO clause",
             ErrorCodes::INCORRECT_QUERY);
 
-    /// Default value, if only table name exist in the query
-    select_database_name = local_context.getCurrentDatabase();
     if (query.select->list_of_selects->children.size() != 1)
         throw Exception("UNION is not supported for MATERIALIZED VIEW", ErrorCodes::QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW);
 
     inner_query = query.select->list_of_selects->children.at(0);
 
     auto & select_query = inner_query->as<ASTSelectQuery &>();
-    extractDependentTable(select_query, select_database_name, select_table_name);
+    /// Default value, if only table name exist in the query
+    select_table_id = extractDependentTable(select_query, &local_context);
     checkAllowedQueries(select_query);
 
-    if (!select_table_name.empty())
-        global_context.addDependency(
-            StorageID(select_database_name, select_table_name),
-            table_id_);   //FIXME
-
-    // If the destination table is not set, use inner table
-    if (!query.to_table.empty())
+    if (query.to_custom_table)
+        target_table_id = query.to_table_id;
+    else if (attach_)
     {
-        target_database_name = query.to_database;
-        target_table_name = query.to_table;
+        /// If there is an ATTACH request, then the internal table must already be created.
+        target_table_id = StorageID(table_id_.database_name, generateInnerTableName(table_id_.table_name), query.to_table_id.uuid);
     }
     else
     {
-        target_database_name = table_id_.database_name;
-        target_table_name = generateInnerTableName(table_id_.table_name);
-        has_inner_table = true;
-    }
-
-    /// If there is an ATTACH request, then the internal table must already be connected.
-    if (!attach_ && has_inner_table)
-    {
         /// We will create a query to create an internal table.
         auto manual_create_query = std::make_shared<ASTCreateQuery>();
-        manual_create_query->database = target_database_name;
-        manual_create_query->table = target_table_name;
+        manual_create_query->database = table_id_.database_name;
+        manual_create_query->table = generateInnerTableName(table_id_.table_name);
 
         auto new_columns_list = std::make_shared<ASTColumns>();
         new_columns_list->set(new_columns_list->columns, query.columns_list->columns->ptr());
@@ -153,24 +138,14 @@ StorageMaterializedView::StorageMaterializedView(
         manual_create_query->set(manual_create_query->columns_list, new_columns_list);
         manual_create_query->set(manual_create_query->storage, query.storage->ptr());
 
-        /// Execute the query.
-        try
-        {
-            InterpreterCreateQuery create_interpreter(manual_create_query, local_context);
-            create_interpreter.setInternal(true);
-            create_interpreter.execute();
-        }
-        catch (...)
-        {
-            /// In case of any error we should remove dependency to the view.
-            if (!select_table_name.empty())
-                global_context.removeDependency(
-                    StorageID(select_database_name, select_table_name),
-                    table_id_); //FIXME
+        InterpreterCreateQuery create_interpreter(manual_create_query, local_context);
+        create_interpreter.setInternal(true);
+        create_interpreter.execute();
 
-            throw;
-        }
+        target_table_id = global_context.getTable(manual_create_query->database, manual_create_query->table)->getStorageID();
     }
+
+    global_context.addDependency(select_table_id, table_id_);
 }
 
 NameAndTypePair StorageMaterializedView::getColumn(const String & column_name) const
@@ -216,7 +191,7 @@ BlockOutputStreamPtr StorageMaterializedView::write(const ASTPtr & query, const 
 
 static void executeDropQuery(ASTDropQuery::Kind kind, Context & global_context, const String & target_database_name, const String & target_table_name)
 {
-    if (global_context.tryGetTable(target_database_name, target_table_name))
+    if (global_context.tryGetTable(StorageID(target_database_name, target_table_name))) //FIXME
     {
         /// We create and execute `drop` query for internal table.
         auto drop_query = std::make_shared<ASTDropQuery>();
@@ -233,25 +208,23 @@ static void executeDropQuery(ASTDropQuery::Kind kind, Context & global_context, 
 void StorageMaterializedView::drop(TableStructureWriteLockHolder &)
 {
     auto table_id = getStorageID();
-    global_context.removeDependency(
-        StorageID(select_database_name, select_table_name),
-        table_id); //FIXME
+    global_context.removeDependency(select_table_id, table_id);
 
     if (has_inner_table && tryGetTargetTable())
-        executeDropQuery(ASTDropQuery::Kind::Drop, global_context, target_database_name, target_table_name);
+        executeDropQuery(ASTDropQuery::Kind::Drop, global_context, target_table_id.database_name, target_table_id.table_name);
 }
 
 void StorageMaterializedView::truncate(const ASTPtr &, const Context &, TableStructureWriteLockHolder &)
 {
     if (has_inner_table)
-        executeDropQuery(ASTDropQuery::Kind::Truncate, global_context, target_database_name, target_table_name);
+        executeDropQuery(ASTDropQuery::Kind::Truncate, global_context, target_table_id.database_name, target_table_id.table_name);
 }
 
 void StorageMaterializedView::checkStatementCanBeForwarded() const
 {
     if (!has_inner_table)
         throw Exception(
-            "MATERIALIZED VIEW targets existing table " + target_database_name + "." + target_table_name + ". "
+            "MATERIALIZED VIEW targets existing table " + target_table_id.getNameForLogs() + ". "
             + "Execute the statement directly on it.", ErrorCodes::INCORRECT_QUERY);
 }
 
@@ -275,7 +248,7 @@ void StorageMaterializedView::mutate(const MutationCommands & commands, const Co
 
 static void executeRenameQuery(Context & global_context, const String & database_name, const String & table_original_name, const String & new_table_name)
 {
-    if (global_context.tryGetTable(database_name, table_original_name))
+    if (global_context.tryGetTable(StorageID(database_name, table_original_name))) //FIXME
     {
             auto rename = std::make_shared<ASTRenameQuery>();
 
@@ -304,43 +277,37 @@ void StorageMaterializedView::renameInMemory(const String & new_database_name, c
 
     if (has_inner_table && tryGetTargetTable())
     {
-        String new_target_table_name = generateInnerTableName(new_table_name);
-        executeRenameQuery(global_context, target_database_name, target_table_name, new_target_table_name);
-        target_table_name = new_target_table_name;
+        StorageID new_target_table_id(target_table_id.database_name, generateInnerTableName(new_table_name), target_table_id.uuid);
+        executeRenameQuery(global_context, target_table_id.database_name, target_table_id.table_name, new_target_table_id.table_name);
+        target_table_id = new_target_table_id;
     }
 
     auto lock = global_context.getLock();
     std::unique_lock<std::mutex> name_lock;
     auto table_id = getStorageID(&name_lock);
 
-    global_context.removeDependencyUnsafe(
-            StorageID(select_database_name, select_table_name),
-            table_id);
+    global_context.removeDependencyUnsafe(select_table_id, table_id);
 
     IStorage::renameInMemory(new_database_name, new_table_name, &name_lock);
 
-    global_context.addDependencyUnsafe(
-            StorageID(select_database_name, select_table_name),
-            table_id);
+    global_context.addDependencyUnsafe(select_table_id, table_id);
 }
 
 void StorageMaterializedView::shutdown()
 {
     auto table_id = getStorageID();
     /// Make sure the dependency is removed after DETACH TABLE
-    global_context.removeDependency(
-        StorageID(select_database_name, select_table_name),
-        table_id); //FIXME
+    global_context.removeDependency(select_table_id, table_id);
 }
 
 StoragePtr StorageMaterializedView::getTargetTable() const
 {
-    return global_context.getTable(target_database_name, target_table_name);
+    return global_context.getTable(target_table_id);
 }
 
 StoragePtr StorageMaterializedView::tryGetTargetTable() const
 {
-    return global_context.tryGetTable(target_database_name, target_table_name);
+    return global_context.tryGetTable(target_table_id);
 }
 
 Strings StorageMaterializedView::getDataPaths() const

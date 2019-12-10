@@ -7,6 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -29,7 +30,6 @@ namespace DB
 {
 
 static constexpr size_t METADATA_FILE_BUFFER_SIZE = 32768;
-static constexpr char const * TABLE_WITH_UUID_NAME_PLACEHOLDER = "_";
 
 namespace ErrorCodes
 {
@@ -84,7 +84,7 @@ std::pair<String, StoragePtr> createTableFromAST(
 }
 
 
-String getObjectDefinitionFromCreateQuery(const ASTPtr & query)
+String getObjectDefinitionFromCreateQuery(const ASTPtr & query, const Context & context)
 {
     ASTPtr query_clone = query->clone();
     auto * create = query_clone->as<ASTCreateQuery>();
@@ -114,8 +114,12 @@ String getObjectDefinitionFromCreateQuery(const ASTPtr & query)
     create->format = nullptr;
     create->out_file = nullptr;
 
-    if (!create->uuid.empty())
-        create->table = TABLE_WITH_UUID_NAME_PLACEHOLDER;
+    //if (!create->uuid.empty())
+    //    create->table = TABLE_WITH_UUID_NAME_PLACEHOLDER;
+    ReplaceTableNameWithUUIDVisitor visitor({}, nullptr, &context);
+    visitor.visitDDL(query_clone);
+    if (create->select)
+        visitor.visit(*create->select);
 
     std::ostringstream statement_stream;
     formatAST(*create, statement_stream, false);
@@ -165,7 +169,7 @@ void DatabaseOnDisk::createTable(
     String statement;
 
     {
-        statement = getObjectDefinitionFromCreateQuery(query);
+        statement = getObjectDefinitionFromCreateQuery(query, context);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
         WriteBufferFromFile out(table_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);

@@ -76,7 +76,7 @@ void DatabaseWithDictionaries::createDictionary(const Context & context, const S
     String statement;
 
     {
-        statement = getObjectDefinitionFromCreateQuery(query);
+        statement = getObjectDefinitionFromCreateQuery(query, context);
 
         /// Exclusive flags guarantees, that table is not created right now in another thread. Otherwise, exception will be thrown.
         WriteBufferFromFile out(dictionary_metadata_tmp_path, statement.size(), O_WRONLY | O_CREAT | O_EXCL);
