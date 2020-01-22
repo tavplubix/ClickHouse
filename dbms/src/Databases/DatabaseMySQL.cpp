@@ -431,7 +431,7 @@ void DatabaseMySQL::loadStoredObjects(Context &, bool)
     }
 }
 
-void DatabaseMySQL::removeTable(const Context &, const String & table_name)
+void DatabaseMySQL::dropTable(const Context &, const String & table_name)
 {
     std::lock_guard<std::mutex> lock{mutex};
 
@@ -452,15 +452,18 @@ void DatabaseMySQL::removeTable(const Context &, const String & table_name)
 
     remove_or_detach_tables.emplace(table_name);
 
+    bool remove_flag_created = false;
     try
     {
         remove_flag.createFile();
+        remove_flag_created = true;
         table_iter->second.second->drop();
         table_iter->second.second->is_dropped = true;
     }
     catch (...)
     {
-        remove_or_detach_tables.erase(table_name);
+        if (!remove_flag_created)
+            remove_or_detach_tables.erase(table_name);
         throw;
     }
 }

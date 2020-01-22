@@ -14,11 +14,13 @@ namespace ErrorCodes
     extern const int FILE_DOESNT_EXIST;
 }
 
-DatabaseAtomic::DatabaseAtomic(String name_, String metadata_path_, const Context & context_)
+DatabaseAtomic::DatabaseAtomic(String name_, String metadata_path_, Context & context_)
     : DatabaseOrdinary(name_, metadata_path_, context_)
 {
     data_path = "store/";
-    log = &Logger::get("DatabaseAtomic (" + name_ + ")");
+    auto log_name = "DatabaseAtomic (" + name_ + ")";
+    log = &Logger::get(log_name);
+    drop_task = context_.getSchedulePool().createTask(log_name, [this](){ this->dropTableDataTask(); });
 }
 
 String DatabaseAtomic::getTableDataPath(const String & table_name) const
@@ -63,6 +65,13 @@ StoragePtr DatabaseAtomic::detachTable(const String & name)
     return DatabaseWithDictionaries::detachTable(name);
 }
 
+void DatabaseAtomic::dropTable(const Context & /*context*/, const String & /*table_name*/)
+{
+    //auto table = detachTable(table_name);
+    //auto detach_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+
+}
+
 void DatabaseAtomic::renameTable(const Context & context, const String & table_name, IDatabase & to_database,
                                  const String & to_table_name)
 {
@@ -87,6 +96,44 @@ void DatabaseAtomic::renameTable(const Context & context, const String & table_n
     to_database.attachTable(to_table_name, table, getTableDataPath(table_name));
     detachTable(table_name);
     Poco::File(getObjectMetadataPath(table_name)).renameTo(to_database.getObjectMetadataPath(to_table_name));
+}
+
+void DatabaseAtomic::loadStoredObjects(Context & context, bool has_force_restore_data_flag)
+{
+    DatabaseOrdinary::loadStoredObjects(context, has_force_restore_data_flag);
+    drop_task->activateAndSchedule();
+}
+
+void DatabaseAtomic::shutdown()
+{
+    drop_task->deactivate();
+    DatabaseWithDictionaries::shutdown();
+}
+
+void DatabaseAtomic::dropTableDataTask()
+{
+    try
+    {
+        StoragePtr table_to_drop;
+        {
+            std::lock_guard lock(tables_to_drop_mutex);
+            time_t current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+            auto it = std::find_if(tables_to_drop.begin(), tables_to_drop.end(), [current_time](const TableWithDropTime & elem)
+            {
+                return elem.first.unique() && elem.second + drop_delay_s < current_time;
+            });
+            if (it == tables_to_drop.end())
+                return;
+        }
+        if (!table_to_drop)
+            return;
+
+        table_to_drop->drop();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
 }
 
 

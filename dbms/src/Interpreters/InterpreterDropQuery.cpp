@@ -10,6 +10,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include <Databases/DatabaseAtomic.h>
 
 
 namespace DB
