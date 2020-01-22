@@ -120,7 +120,7 @@ BlockIO InterpreterDropQuery::executeToTable(
                 if (Poco::File(prev_metadata_name).exists())
                     Poco::File(prev_metadata_name).renameTo(drop_metadata_name);
                 /// Delete table data
-                database_and_table.second->drop(table_lock);
+                database_and_table.second->drop();
             }
             catch (...)
             {
@@ -216,7 +216,7 @@ BlockIO InterpreterDropQuery::executeToTemporaryTable(String & table_name, ASTDr
                 /// If table was already dropped by anyone, an exception will be thrown
                 auto table_lock = table->lockExclusively(context.getCurrentQueryId());
                 /// Delete table data
-                table->drop(table_lock);
+                table->drop();
                 table->is_dropped = true;
             }
         }
