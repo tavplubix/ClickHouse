@@ -43,7 +43,7 @@ public:
     String getTableDataPath(const String & table_name) const override { return data_path + escapeForFileName(table_name) + "/"; }
     String getTableDataPath(const ASTCreateQuery & query) const override { return getTableDataPath(query.table); }
 
-private:
+protected:
     String data_path;
     using NameToASTCreate = std::unordered_map<String, ASTPtr>;
     NameToASTCreate create_queries;
