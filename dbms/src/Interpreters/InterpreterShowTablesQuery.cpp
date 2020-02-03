@@ -2,6 +2,7 @@
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/formatAST.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Common/typeid_cast.h>
@@ -37,11 +38,11 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
 
     String database = query.from.empty() ? context.getCurrentDatabase() : query.from;
 
-    /** The parameter check_database_access_rights is reset when the SHOW TABLES query is processed,
+    /** Use DatabaseCatalog directly without checking access rights when the SHOW TABLES query is processed,
       * So that all clients can see a list of all databases and tables in them regardless of their access rights
       * to these databases.
       */
-    context.assertDatabaseExists(database, false);
+    context.getDatabaseCatalog().assertDatabaseExists(database);
 
     std::stringstream rewritten_query;
     rewritten_query << "SELECT name FROM system.";
