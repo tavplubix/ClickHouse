@@ -129,6 +129,8 @@ struct IHostContext
 using IHostContextPtr = std::shared_ptr<IHostContext>;
 
 struct TemporaryTableHolder;
+class DatabaseCatalog;
+using DatabaseCatalogPtr = std::shared_ptr<DatabaseCatalog>;
 
 /** A set of known objects that can be used in the query.
   * Consists of a shared part (always common to all sessions and queries)
@@ -281,15 +283,22 @@ public:
 
     bool hasDictionaryAccessRights(const String & dictionary_name) const;
 
+    DatabaseCatalog & getDatabaseCatalog() const;
+
     /** The parameter check_database_access_rights exists to not check the permissions of the database again,
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
       * made this check.
       */
-    void assertTableDoesntExist(const String & database_name, const String & table_name, bool check_database_acccess_rights = true) const;
-    void assertDatabaseExists(const String & database_name, bool check_database_acccess_rights = true) const;
+    void assertTableDoesntExist(const String & database_name, const String & table_name) const;
+    void assertDatabaseExists(const String & database_name) const;
 
-    void assertDatabaseDoesntExist(const String & database_name) const;
     void checkDatabaseAccessRights(const std::string & database_name) const;
+
+    String resolveDatabase(const String & database_name) const;
+    String resolveDatabaseAndCheckAccess(const String & database_name) const;
+    //StorageID resolveDatabase(StorageID table_id) const;
+    StorageID resolveStorageID(StorageID storage_id) const;
+    StorageID resolveStorageIDUnlocked(StorageID storage_id) const;
 
     const Scalars & getScalars() const;
     const Block & getScalar(const String & name) const;
@@ -303,7 +312,6 @@ public:
     void addScalar(const String & name, const Block & block);
     bool hasScalar(const String & name) const;
     bool removeExternalTable(const String & table_name);
-    StorageID resolveStorageIDUnlocked(StorageID storage_id) const;
 
     StoragePtr executeTableFunction(const ASTPtr & table_expression);
 
@@ -392,13 +400,10 @@ public:
     /// Get query for the CREATE table.
     ASTPtr getCreateExternalTableQuery(const String & table_name) const;
 
-    const DatabasePtr getDatabase(const String & database_name) const;
-    DatabasePtr getDatabase(const String & database_name);
-    const DatabasePtr tryGetDatabase(const String & database_name) const;
-    DatabasePtr tryGetDatabase(const String & database_name);
+    DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr tryGetDatabase(const String & database_name) const;
 
-    const Databases getDatabases() const;
-    Databases getDatabases();
+    Databases getDatabases() const;
 
     std::shared_ptr<Context> acquireSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
     void releaseSession(const String & session_id, std::chrono::steady_clock::duration timeout);
