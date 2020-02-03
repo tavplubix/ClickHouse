@@ -37,11 +37,6 @@ String InterpreterShowTablesQuery::getRewrittenQuery()
         throw Exception("The `FROM` and `TEMPORARY` cannot be used together in `SHOW TABLES`", ErrorCodes::SYNTAX_ERROR);
 
     String database = query.from.empty() ? context.getCurrentDatabase() : query.from;
-
-    /** Use DatabaseCatalog directly without checking access rights when the SHOW TABLES query is processed,
-      * So that all clients can see a list of all databases and tables in them regardless of their access rights
-      * to these databases.
-      */
     context.getDatabaseCatalog().assertDatabaseExists(database);
 
     std::stringstream rewritten_query;

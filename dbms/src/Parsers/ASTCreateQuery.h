@@ -5,6 +5,7 @@
 #include <Parsers/ASTDictionary.h>
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Storages/StorageID.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 
 
 namespace DB
@@ -48,8 +49,6 @@ public:
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
 };
 
-
-class ASTSelectWithUnionQuery;
 
 /// CREATE TABLE or ATTACH TABLE query
 class ASTCreateQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnCluster
