@@ -6,6 +6,7 @@
 #include <Core/Types.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/DatabaseCatalog.h>
 #include <Parsers/IAST_fwd.h>
 #include <Common/LRUCache.h>
 #include <Common/MultiVersion.h>
@@ -181,8 +182,6 @@ private:
 
     String default_format;  /// Format, used when server formats data by itself and if query does not have FORMAT specification.
                             /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
-    // TODO maybe replace with DatabaseMemory?
-    //TableAndCreateASTs external_tables;     /// Temporary tables.
     using TemporaryTablesMapping = std::map<String, std::shared_ptr<TemporaryTableHolder>>;
     TemporaryTablesMapping external_tables_mapping;
     Scalars scalars;
@@ -302,19 +301,8 @@ public:
 
     /// Checking the existence of the table/database. Database can be empty - in this case the current database is used.
     bool isTableExist(const String & database_name, const String & table_name) const;
-    bool isDatabaseExist(const String & database_name) const;
     bool isDictionaryExists(const String & database_name, const String & dictionary_name) const;
     bool isExternalTableExist(const String & table_name) const;
-
-    DatabaseCatalog & getDatabaseCatalog() const;
-
-    /** The parameter check_database_access_rights exists to not check the permissions of the database again,
-      * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
-      * made this check.
-      */
-    void assertTableDoesntExist(const String & database_name, const String & table_name) const;
-    void assertDatabaseExists(const String & database_name) const;
-
 
     String resolveDatabase(const String & database_name) const;
     //StorageID resolveDatabase(StorageID table_id) const;
@@ -338,9 +326,6 @@ public:
 
     void addViewSource(const StoragePtr & storage);
     StoragePtr getViewSource();
-
-    void addDatabase(const String & database_name, const DatabasePtr & database);
-    DatabasePtr detachDatabase(const String & database_name);
 
     /// Get an object that protects the table from concurrently executing multiple DDL operations.
     std::unique_ptr<DDLGuard> getDDLGuard(const String & database, const String & table) const;
@@ -420,11 +405,6 @@ public:
 
     /// Get query for the CREATE table.
     ASTPtr getCreateExternalTableQuery(const String & table_name) const;
-
-    DatabasePtr getDatabase(const String & database_name) const;
-    DatabasePtr tryGetDatabase(const String & database_name) const;
-
-    Databases getDatabases() const;
 
     std::shared_ptr<Context> acquireSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
     void releaseSession(const String & session_id, std::chrono::steady_clock::duration timeout);

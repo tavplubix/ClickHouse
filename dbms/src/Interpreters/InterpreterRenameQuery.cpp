@@ -88,14 +88,15 @@ BlockIO InterpreterRenameQuery::execute()
     for (auto & table_guard : table_guards)
         table_guard.second = context.getDDLGuard(table_guard.first.database_name, table_guard.first.table_name);
 
+    auto & database_catalog = DatabaseCatalog::instance();
     for (auto & elem : descriptions)
     {
-        context.assertTableDoesntExist(elem.to_database_name, elem.to_table_name);
+        database_catalog.assertTableDoesntExist(StorageID(elem.to_database_name, elem.to_table_name), context);
 
-        context.getDatabase(elem.from_database_name)->renameTable(
+        database_catalog.getDatabase(elem.from_database_name)->renameTable(
             context,
             elem.from_table_name,
-            *context.getDatabase(elem.to_database_name),
+            *database_catalog.getDatabase(elem.to_database_name),
             elem.to_table_name);
     }
 
