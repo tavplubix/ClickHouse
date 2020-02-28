@@ -20,6 +20,9 @@ enum class TraceType : UInt8
     REAL_TIME,
     CPU_TIME,
     MEMORY,
+    SC_INC,
+    SC_DEC,
+    SC_REL,
 };
 
 class TraceCollector

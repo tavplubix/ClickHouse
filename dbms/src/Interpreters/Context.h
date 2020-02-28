@@ -684,4 +684,23 @@ private:
     ThreadFromGlobalPool thread{&SessionCleaner::run, this};
 };
 
+
+struct ContextGetter
+{
+
+    static Context & instance(Context * global = nullptr)
+    {
+        static ContextGetter getter(global);
+        return *getter.gcntxt;
+    }
+
+    ContextGetter(Context * global) : gcntxt(global)
+    {
+        if (!global)
+            throw Exception("not initialized", 42);
+    }
+
+    Context * gcntxt;
+};
+
 }

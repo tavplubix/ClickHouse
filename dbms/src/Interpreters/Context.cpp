@@ -543,6 +543,8 @@ void Context::setPath(const String & path)
 {
     auto lock = getLock();
 
+    ContextGetter::instance(this);
+
     shared->path = path;
 
     if (shared->tmp_path.empty() && !shared->tmp_volume)

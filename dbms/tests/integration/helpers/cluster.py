@@ -537,6 +537,9 @@ services:
             - {configs_dir}:/etc/clickhouse-server/
             - {db_dir}:/var/lib/clickhouse/
             - {logs_dir}:/var/log/clickhouse-server/
+            - /usr/bin/llvm-symbolizer-9:/usr/bin/llvm-symbolizer-9
+            - /usr/lib/llvm-9/:/usr/lib/llvm-9/
+            - /usr/lib/x86_64-linux-gnu/:/usr/lib/x86_64-linux-gnu/
             {binary_volume}
             {odbc_bridge_volume}
             {odbc_ini_path}
