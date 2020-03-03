@@ -106,16 +106,23 @@ struct TemporaryTableHolder : boost::noncopyable
                         const ASTPtr & query = {})
         : context(context_), external_tables(external_tables_)
     {
-        if (query)
+        ASTCreateQuery * create = dynamic_cast<ASTCreateQuery *>(query.get());
+        if (create)
         {
-            ASTCreateQuery & create = dynamic_cast<ASTCreateQuery &>(*query);
-            if (create.uuid == UUIDHelpers::Nil)
-                create.uuid = UUIDHelpers::generateV4();
-            id = create.uuid;
+            if (create->uuid == UUIDHelpers::Nil)
+                create->uuid = UUIDHelpers::generateV4();
+            id = create->uuid;
         }
         else
             id = UUIDHelpers::generateV4();
-        external_tables.createTable(context, "_data_" + toString(id), table, query);
+        String global_name = "_data_" + toString(id);
+        external_tables.createTable(context, global_name, table, query ? query->clone() : query);
+        if (create)
+        {
+            create->database = DatabaseCatalog::TEMPORARY_DATABASE;
+            create->table = global_name;
+            create->uuid = id;
+        }
     }
 
     TemporaryTableHolder(TemporaryTableHolder && other)
@@ -2054,10 +2061,11 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
         return StorageID::createEmpty();
     }
 
-    if (look_for_external_table)
+    if (look_for_external_table && hasSessionContext())
     {
-        auto it = external_tables_mapping.find(storage_id.getTableName());
-        if (it != external_tables_mapping.end())
+        const auto & external_tables = getSessionContext().external_tables_mapping;
+        auto it = external_tables.find(storage_id.getTableName());
+        if (it != external_tables.end())
             return it->second->getGlobalTableID();
     }
 
