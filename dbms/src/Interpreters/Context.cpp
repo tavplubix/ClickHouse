@@ -2074,12 +2074,24 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
         return StorageID::createEmpty();
     }
 
-    if (look_for_external_table && hasSessionContext())
+    if (look_for_external_table)
     {
-        const auto & external_tables = getSessionContext().external_tables_mapping;
-        auto it = external_tables.find(storage_id.getTableName());
-        if (it != external_tables.end())
+        /// Global context should not contain temporary tables
+        assert(global_context != this);
+
+        /// Firstly look for temporary table in current context
+        auto it = external_tables_mapping.find(storage_id.getTableName());
+        if (it != external_tables_mapping.end())
             return it->second->getGlobalTableID();
+
+        /// If not found and current context was created from some session context, look for temporay table in session context
+        if (session_context && session_context != this)
+        {
+            const auto & external_tables = session_context->external_tables_mapping;
+            it = external_tables.find(storage_id.getTableName());
+            if (it != external_tables.end())
+                return it->second->getGlobalTableID();
+        }
     }
 
     if (in_current_database)
