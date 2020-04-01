@@ -72,6 +72,8 @@ private:
     /// Inserts data in created table if it's CREATE ... SELECT
     BlockIO fillTableIfNeeded(const ASTCreateQuery & create);
 
+    void assertOrSetUUIDIfRequired(const IDatabase & database, ASTCreateQuery & query);
+
     ASTPtr query_ptr;
     Context & context;
 

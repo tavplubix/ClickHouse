@@ -589,19 +589,8 @@ bool InterpreterCreateQuery::doCreateTable(/*const*/ ASTCreateQuery & create,
     if (need_add_to_database)
     {
         database = DatabaseCatalog::instance().getDatabase(create.database);
-        if (database->getEngineName() == "Atomic")
-        {
-            //TODO implement ATTACH FROM 'path/to/data': generate UUID and move table data to store/
-            if (create.attach && create.uuid == UUIDHelpers::Nil)
-                throw Exception("UUID must be specified in ATTACH TABLE query for Atomic database engine", ErrorCodes::INCORRECT_QUERY);
-            if (!create.attach && create.uuid == UUIDHelpers::Nil)
-                create.uuid = UUIDHelpers::generateV4();
-        }
-        else
-        {
-            if (create.uuid != UUIDHelpers::Nil)
-                throw Exception("Table UUID specified, but engine of database " + create.database + " is not Atomic", ErrorCodes::INCORRECT_QUERY);
-        }
+        //TODO implement ATTACH FROM 'path/to/data': generate UUID and move table data to store/
+        assertOrSetUUIDIfRequired(*database, create);
 
         if (!create.attach && create.uuid == UUIDHelpers::Nil && database->getEngineName() == "Atomic")
             create.uuid = UUIDHelpers::generateV4();
@@ -712,6 +701,8 @@ BlockIO InterpreterCreateQuery::createDictionary(ASTCreateQuery & create)
     auto guard = DatabaseCatalog::instance().getDDLGuard(database_name, dictionary_name);
     DatabasePtr database = DatabaseCatalog::instance().getDatabase(database_name);
 
+    assertOrSetUUIDIfRequired(*database, create);
+
     if (database->isDictionaryExist(context, dictionary_name))
     {
         /// TODO Check structure of dictionary
@@ -724,7 +715,7 @@ BlockIO InterpreterCreateQuery::createDictionary(ASTCreateQuery & create)
 
     if (create.attach)
     {
-        auto query = DatabaseCatalog::instance().getDatabase(database_name)->getCreateDictionaryQuery(context, dictionary_name);
+        auto query = DatabaseCatalog::instance().getDatabase(database_name)->getCreateDictionaryQuery(context, dictionary_name);    //FIXME uaf
         create = query->as<ASTCreateQuery &>();
         create.attach = true;
     }
@@ -802,6 +793,22 @@ AccessRightsElements InterpreterCreateQuery::getRequiredAccess() const
         required_access.emplace_back(AccessType::INSERT, create.to_table_id.database_name, create.to_table_id.table_name);
 
     return required_access;
+}
+
+void InterpreterCreateQuery::assertOrSetUUIDIfRequired(const IDatabase & database, ASTCreateQuery & create)
+{
+    if (database->getEngineName() == "Atomic")
+    {
+        if (create.attach && create.uuid == UUIDHelpers::Nil)
+            throw Exception("UUID must be specified in ATTACH query for Atomic database", ErrorCodes::INCORRECT_QUERY);
+        if (!create.attach && create.uuid == UUIDHelpers::Nil)
+            create.uuid = UUIDHelpers::generateV4();
+    }
+    else
+    {
+        if (create.uuid != UUIDHelpers::Nil)
+            throw Exception("Table UUID specified, but engine of database " + create.database + " is not Atomic", ErrorCodes::INCORRECT_QUERY);
+    }
 }
 
 }
