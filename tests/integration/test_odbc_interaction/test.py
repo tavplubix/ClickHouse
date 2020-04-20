@@ -183,6 +183,7 @@ def test_sqlite_odbc_cached_dictionary(started_cluster):
 def test_postgres_odbc_hached_dictionary_with_schema(started_cluster):
     conn = get_postgres_conn()
     cursor = conn.cursor()
+    cursor.execute("truncate table clickhouse.test_table")
     cursor.execute("insert into clickhouse.test_table values(1, 'hello'),(2, 'world')")
     time.sleep(5)
     assert node1.query("select dictGetString('postgres_odbc_hashed', 'column2', toUInt64(1))") == "hello\n"
@@ -191,6 +192,7 @@ def test_postgres_odbc_hached_dictionary_with_schema(started_cluster):
 def test_postgres_odbc_hached_dictionary_no_tty_pipe_overflow(started_cluster):
     conn = get_postgres_conn()
     cursor = conn.cursor()
+    cursor.execute("truncate table clickhouse.test_table")
     cursor.execute("insert into clickhouse.test_table values(3, 'xxx')")
     for i in xrange(100):
         try:
@@ -199,6 +201,25 @@ def test_postgres_odbc_hached_dictionary_no_tty_pipe_overflow(started_cluster):
             assert False, "Exception occured -- odbc-bridge hangs: " + str(ex)
 
     assert node1.query("select dictGetString('postgres_odbc_hashed', 'column2', toUInt64(3))") == "xxx\n"
+
+def test_table_function(started_cluster):
+    conn = get_postgres_conn()
+    cursor = conn.cursor()
+    cursor.execute("truncate table clickhouse.test_table")
+    table_function = "odbc('DSN=postgresql_odbc;', 'clickhouse', 'test_table')"
+    #node1.query("insert into table function {} values (1, 'hello'), (2, 'world')".format(table_function))
+    cursor.execute("insert into clickhouse.test_table values (1, 'hello'), (2, 'world'), (3, 'table'), (4, 'function')")
+
+    assert node1.query("select count() from {}".format(table_function)) == "4\n"
+    assert node1.query("select (*,).1 as id, (*,).2 from ("
+                       "select * from {} where column1 in (select column1 from {} where length(column2) > 5) "
+                       "union all "
+                       "select t.column1, t.column2 from {} as t join numbers(3) as n on t.column1=toInt32(n.number) "
+                       "union all "
+                       "select * from {} where column1=3"
+                       ") order by id".format(table_function, table_function, table_function, table_function)) \
+                       == "1\thello\n2\tworld\n3\ttable\n4\tfunction\n"
+    pass
 
 def test_bridge_dies_with_parent(started_cluster):
     node1.query("select dictGetString('postgres_odbc_hashed', 'column2', toUInt64(1))")
