@@ -320,5 +320,5 @@ endif()
 
 if (USE_CASSANDRA)
     add_subdirectory(libuv)
-    add_subdirectory(cassandra)
+    add_subdirectory(cassandra-cmake)
 endif()
