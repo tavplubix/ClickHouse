@@ -28,7 +28,7 @@ def start_cluster():
     try:
         cluster.start()
 
-        fill_nodes([node_1_1, node_1_2], 1)
+        fill_nodes([node_1_1, node_1_2, node_1_3], 1)
 
         yield cluster
 
