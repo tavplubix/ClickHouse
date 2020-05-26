@@ -52,6 +52,7 @@ Replicas can be dropped using following syntax:
 
 ```sql
 SYSTEM DROP REPLICA replica_name FROM [db].name;
+SYSTEM DROP REPLICA replica_name '/path/to/table/in/zk';
 ```
 
 Queries will remove the replica path in zookeeper, it's useful when you want to decrease your replica factor. It will only drop the inactive/stale replica, and it can't drop local replica, please use `SYSTEM DROP REPLICA` for that.
