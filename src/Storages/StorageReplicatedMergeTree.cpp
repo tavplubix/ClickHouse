@@ -583,6 +583,47 @@ void StorageReplicatedMergeTree::createReplica()
     } while (code == Coordination::Error::ZBADVERSION);
 }
 
+void StorageReplicatedMergeTree::removeReplicaByZKPaths(const String & replica, const std::list<String> & zk_paths)
+{
+    if (replica_name == replica)
+    {
+        throw Exception("We can't drop local replica, please use `DROP TABLE` if you want to clean the data and drop this replica",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto zookeeper = tryGetZooKeeper();
+    if (zookeeper->expired())
+        throw Exception("Table was not dropped because ZooKeeper session has expired.", ErrorCodes::TABLE_WAS_NOT_DROPPED);
+
+    for (auto & to_drop_path : zk_paths)
+    {
+        //check if is active replica if we drop other replicas
+        if (replica != replica_name && zookeeper->exists(to_drop_path + "/is_active"))
+        {
+            LOG_INFO(log, "Can't remove replica: " << replica << ", zkpath:" << to_drop_path << ", because it's active");
+            continue;
+        }
+
+        LOG_INFO(log, "Removing replica " << to_drop_path);
+        /// It may left some garbage if to_drop_path subtree are concurently modified
+        zookeeper->tryRemoveRecursive(to_drop_path);
+        if (zookeeper->exists(to_drop_path))
+            LOG_ERROR(log, "Replica was not completely removed from ZooKeeper, "
+                        << to_drop_path << " still exists and may contain some garbage.");
+
+        /// Check that `zookeeper_path` exists: it could have been deleted by another replica after execution of previous line.
+        Strings replicas;
+        if (zookeeper->tryGetChildren(zookeeper_path + "/replicas", replicas) == Coordination::ZOK && replicas.empty())
+        {
+            LOG_INFO(log, "Removing table " << zookeeper_path << " (this might take several minutes)");
+            zookeeper->tryRemoveRecursive(zookeeper_path);
+            if (zookeeper->exists(zookeeper_path))
+                LOG_ERROR(log, "Table was not completely removed from ZooKeeper, "
+                            << zookeeper_path << " still exists and may contain some garbage.");
+        }
+    }
+
+}
 
 void StorageReplicatedMergeTree::removeReplica(const String & replica)
 {

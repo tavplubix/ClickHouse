@@ -117,6 +117,10 @@ public:
 
     void truncate(const ASTPtr &, const Context &, TableStructureWriteLockHolder &) override;
 
+    /** Remove replica by zkpaths
+     */
+    void removeReplicaByZKPaths(const String & replica,const std::list<String> & zk_paths);
+
     /** Removes a specific replica from Zookeeper.
      */
     void dropReplica(const String & replica_name);

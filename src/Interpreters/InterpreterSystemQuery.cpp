@@ -179,7 +179,7 @@ BlockIO InterpreterSystemQuery::execute()
 
     /// Make canonical query for simpler processing
     if (!query.table.empty())
-         table_id = context.resolveStorageID(StorageID(query.database, query.table), Context::ResolveOrdinary);
+        table_id = context.resolveStorageID(StorageID(query.database, query.table), Context::ResolveOrdinary);
 
     if (!query.target_dictionary.empty() && !query.database.empty())
         query.target_dictionary = query.database + "." + query.target_dictionary;
@@ -396,6 +396,9 @@ void InterpreterSystemQuery::restartReplicas(Context & system_context)
 
 void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
 {
+    std::list<String> zk_paths;
+    StorageReplicatedMergeTree::Status status;
+    StorageReplicatedMergeTree * local_replicated = NULL;
     if (!table_id.empty())
     {
         context.checkAccess(AccessType::SYSTEM_DROP_REPLICA, table_id);
@@ -403,18 +406,38 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
 
         if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
         {
-            storage_replicated->dropReplica(query.replica);
+            local_replicated = storage_replicated;
+            storage_replicated->getStatus(status);
+            zk_paths.push_back(status.zookeeper_path + "/replicas/" + query.replica);
             LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
         }
         else
             throw Exception("Table " + table_id.getNameForLogs() + " is not replicated", ErrorCodes::BAD_ARGUMENTS);
     }
-    else
+    else if (!query.database.empty())
+    {
+        auto databases = DatabaseCatalog::instance().getDatabases();
+        auto it = databases.find(query.database);
+        if (it != databases.end())
+        {
+            DatabasePtr & database = it->second;
+            for (auto iterator = database->getTablesIterator(); iterator->isValid(); iterator->next())
+            {
+                if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
+                {
+                    local_replicated = storage_replicated;
+                    storage_replicated->getStatus(status);
+                    zk_paths.push_back(status.zookeeper_path + "/replicas/" + query.replica);
+                    LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
+                }
+            }
+        }
+    }
+    else if (!query.replica_zk_path.empty())
     {
         context.checkAccess(AccessType::SYSTEM_DROP_REPLICA);
         auto to_drop_path = query.replica_zk_path + "/replicas/" + query.replica;
         auto & catalog = DatabaseCatalog::instance();
-        StorageReplicatedMergeTree::Status status;
 
         for (auto & elem : catalog.getDatabases())
         {
@@ -423,6 +446,7 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
             {
                 if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
                 {
+                    local_replicated = storage_replicated;
                     storage_replicated->getStatus(status);
                     if (to_drop_path.compare(status.replica_path) == 0)
                         throw Exception("We can't drop local replica, please use `DROP TABLE` if you want to clean the data and drop this replica",
@@ -430,33 +454,29 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
                 }
             }
         }
+        zk_paths.push_back(to_drop_path);
+    }
+    else if (query.is_drop_whole_replica)
+    {
+        auto databases = DatabaseCatalog::instance().getDatabases();
 
-        auto zookeeper = context.getZooKeeper();
-
-        // TODO check if local table have this this replica_path
-        //check if is active replica if we drop other replicas
-        if (zookeeper->exists(to_drop_path + "/is_active"))
+        for (auto & elem : databases)
         {
-            throw Exception("Can't remove replica: " + query.replica + ", because it's active",
-                ErrorCodes::LOGICAL_ERROR);
-        }
-        /// It may left some garbage if to_drop_path subtree are concurently modified
-        zookeeper->tryRemoveRecursive(to_drop_path);
-        if (zookeeper->exists(to_drop_path))
-            LOG_ERROR(log, "Replica was not completely removed from ZooKeeper, "
-                        << to_drop_path << " still exists and may contain some garbage.");
-
-        /// Check that `query.replica_zk_path` exists: it could have been deleted by another replica after execution of previous line.
-        Strings replicas;
-        if (zookeeper->tryGetChildren(query.replica_zk_path + "/replicas", replicas) == Coordination::ZOK && replicas.empty())
-        {
-            LOG_INFO(log, "Removing zookeeper path " << query.replica_zk_path << " (this might take several minutes)");
-            zookeeper->tryRemoveRecursive(query.replica_zk_path);
-            if (zookeeper->exists(query.replica_zk_path))
-                LOG_ERROR(log, "Table was not completely removed from ZooKeeper, "
-                            << query.replica_zk_path << " still exists and may contain some garbage.");
+            DatabasePtr & database = elem.second;
+            for (auto iterator = database->getTablesIterator(); iterator->isValid(); iterator->next())
+            {
+                if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
+                {
+                    local_replicated = storage_replicated;
+                    storage_replicated->getStatus(status);
+                    zk_paths.push_back(status.zookeeper_path + "/replicas/" + query.replica);
+                    LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
+                }
+            }
         }
     }
+    if (!zk_paths.empty() && local_replicated != NULL)
+        local_replicated->removeReplicaByZKPaths(query.replica, zk_paths);
 
 }
 
