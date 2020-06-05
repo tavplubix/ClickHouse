@@ -396,7 +396,7 @@ void InterpreterSystemQuery::restartReplicas(Context & system_context)
 
 void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
 {
-    std::list<String> zk_paths;
+    std::map<String, StorageReplicatedMergeTree *> zk_paths;
     StorageReplicatedMergeTree::Status status;
     StorageReplicatedMergeTree * local_replicated = NULL;
     if (!table_id.empty())
@@ -408,7 +408,8 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
         {
             local_replicated = storage_replicated;
             storage_replicated->getStatus(status);
-            zk_paths.push_back(status.zookeeper_path + "/replicas/" + query.replica);
+            String to_drop_path = status.zookeeper_path + "/replicas/" + query.replica;
+            zk_paths.insert(std::pair<String, StorageReplicatedMergeTree *>(to_drop_path, local_replicated));
             LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
         }
         else
@@ -427,7 +428,8 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
                 {
                     local_replicated = storage_replicated;
                     storage_replicated->getStatus(status);
-                    zk_paths.push_back(status.zookeeper_path + "/replicas/" + query.replica);
+                    String to_drop_path = status.zookeeper_path + "/replicas/" + query.replica;
+                    zk_paths.insert(std::pair<String, StorageReplicatedMergeTree *>(to_drop_path, local_replicated));
                     LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
                 }
             }
@@ -454,7 +456,7 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
                 }
             }
         }
-        zk_paths.push_back(to_drop_path);
+        zk_paths.insert(std::pair<String, StorageReplicatedMergeTree *>(to_drop_path, local_replicated));
     }
     else if (query.is_drop_whole_replica)
     {
@@ -469,15 +471,22 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
                 {
                     local_replicated = storage_replicated;
                     storage_replicated->getStatus(status);
-                    zk_paths.push_back(status.zookeeper_path + "/replicas/" + query.replica);
+                    String to_drop_path = status.zookeeper_path + "/replicas/" + query.replica;
+                    zk_paths.insert(std::pair<String, StorageReplicatedMergeTree *>(to_drop_path, local_replicated));
                     LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
                 }
             }
         }
     }
-    if (!zk_paths.empty() && local_replicated != NULL)
-        local_replicated->removeReplicaByZKPaths(query.replica, zk_paths);
-
+    if (!zk_paths.empty())
+    {
+        for (auto it = zk_paths.begin(); it != zk_paths.end(); ++it)
+        {
+            local_replicated = it->second;
+            if (local_replicated != NULL)
+                local_replicated->removeReplicaByZKPath(query.replica, it->first);
+        }
+    }
 }
 
 void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
