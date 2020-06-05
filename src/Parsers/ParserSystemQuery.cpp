@@ -87,7 +87,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                     if (!ParserStringLiteral{}.parse(pos, path_ast, expected))
                         return false;
                     String zk_path = path_ast->as<ASTLiteral &>().value.safeGet<String>();
-                    if (zk_path[zk_path.size()-1] == '/')
+                    if (!zk_path.empty() && zk_path[zk_path.size()-1] == '/')
                         zk_path.pop_back();
                     res->replica_zk_path = zk_path;
                 }
