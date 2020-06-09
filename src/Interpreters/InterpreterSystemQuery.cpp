@@ -467,11 +467,9 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
             for (auto iterator = database->getTablesIterator(); iterator->isValid(); iterator->next())
             {
                 if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
-                {
                     storage_replicated->dropReplica(query.replica);
-                    LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
-                }
             }
+            LOG_TRACE(log, "DROP REPLICA " + query.replica + " DATABSE " +  database->getDatabaseName() + ": OK");
         }
     }
     else if (!query.replica_zk_path.empty())
@@ -488,11 +486,9 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
             for (auto iterator = database->getTablesIterator(); iterator->isValid(); iterator->next())
             {
                 if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
-                {
                     storage_replicated->dropReplica(query.replica);
-                    LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
-                }
             }
+            LOG_TRACE(log, "DROP REPLICA " + query.replica + " DATABSE " +  database->getDatabaseName() + ": OK");
         }
     }
 }
