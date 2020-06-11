@@ -417,7 +417,6 @@ void InterpreterSystemQuery::dropReplicaByZKPath(ASTSystemQuery & query)
     }
     auto zookeeper = context.getZooKeeper();
 
-    // TODO check if local table have this this replica_path
     //check if is active replica if we drop other replicas
     if (zookeeper->exists(to_drop_path + "/is_active"))
         throw Exception("Can't remove replica: " + query.replica + ", because it's active",

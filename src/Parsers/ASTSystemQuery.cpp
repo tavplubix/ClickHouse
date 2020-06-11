@@ -123,18 +123,17 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
                     << quoteString(replica) << (settings.hilite ? hilite_none : "");
         if (!table.empty())
         {
-            settings.ostr << " FROM " << " TABLE ";
+            settings.ostr << " FROM TABLE";
             print_database_table();
         }
         else if (!replica_zk_path.empty())
         {
-            settings.ostr << " FROM " << " ZKPATH " << (settings.hilite ? hilite_identifier : "") << quoteString(replica_zk_path)
+            settings.ostr << " FROM ZKPATH " << (settings.hilite ? hilite_identifier : "") << quoteString(replica_zk_path)
                       << (settings.hilite ? hilite_none : "");
         }
         else if (!database.empty())
         {
-            settings.ostr << " FROM " << " DATABASE ";
-            settings.ostr << " ";
+            settings.ostr << " FROM DATABASE ";
             settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(database)
                         << (settings.hilite ? hilite_none : "");
         }

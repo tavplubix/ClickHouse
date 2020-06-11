@@ -9,7 +9,7 @@ toc_title: SYSTEM
 -   [RELOAD DICTIONARY](#query_language-system-reload-dictionary)
 -   [DROP DNS CACHE](#query_language-system-drop-dns-cache)
 -   [DROP MARK CACHE](#query_language-system-drop-mark-cache)
--   [DROP REPLICA TABLE](#query_language-system-drop-replica-table)
+-   [DROP REPLICA](#query_language-system-drop-replica-table)
 -   [FLUSH LOGS](#query_language-system-flush_logs)
 -   [RELOAD CONFIG](#query_language-system-reload-config)
 -   [SHUTDOWN](#query_language-system-shutdown)
@@ -46,16 +46,23 @@ For more convenient (automatic) cache management, see disable\_internal\_dns\_ca
 
 Resets the mark cache. Used in development of ClickHouse and performance tests.
 
-## DROP REPLICA TABLE {query_language-system-drop-replica-table}
+## DROP REPLICA {query_language-system-drop-replica-table}
 
 Replicas can be dropped using following syntax:
 
 ```sql
-SYSTEM DROP REPLICA replica_name FROM [db].name;
-SYSTEM DROP REPLICA replica_name '/path/to/table/in/zk';
+SYSTEM DROP REPLICA replica_name;
+SYSTEM DROP REPLICA replica_name FROM DATABASE database;
+SYSTEM DROP REPLICA replica_name FROM TABLE database.table;
 ```
 
 Queries will remove the replica path in zookeeper, it's useful when you want to decrease your replica factor. It will only drop the inactive/stale replica, and it can't drop local replica, please use `SYSTEM DROP REPLICA` for that.
+
+If you want to drop a inactive/stale replicate table that does not have a local replica, you can following syntax:
+
+```sql
+SYSTEM DROP REPLICA replica_name FROM ZKPATH '/path/to/table/in/zk';
+```
 
 ## FLUSH LOGS {#query_language-system-flush_logs}
 
