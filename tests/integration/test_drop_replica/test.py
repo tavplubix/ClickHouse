@@ -97,20 +97,17 @@ def test_drop_replica(start_cluster):
         time.sleep(10)
 
         assert "doesn't exist" in node_1_3.query_and_get_error("SYSTEM DROP REPLICA 'node_1_1' FROM TABLE test.test_table")
-        exists_replica_1_1 = zk.exists("/clickhouse/tables/test/{shard}/replicated/test_table/replicas/{replica}".format(shard=1, replica='node_1_1'))
-        assert (exists_replica_1_1 != None)
 
-        node_1_3.query("SYSTEM DROP REPLICA 'node_1_1' FROM DATABASE test1")
-        exists_replica_1_1 = zk.exists("/clickhouse/tables/test1/{shard}/replicated/test_table/replicas/{replica}".format(shard=1, replica='node_1_1'))
-        assert (exists_replica_1_1 != None)
-
-        node_1_3.query("SYSTEM DROP REPLICA 'node_1_1' FROM ZKPATH '/clickhouse/tables/test2/{shard}/replicated/test_table'".format(shard=1))
-        exists_replica_1_1 = zk.exists("/clickhouse/tables/test2/{shard}/replicated/test_table/replicas/{replica}".format(shard=1, replica='node_1_1'))
-        assert (exists_replica_1_1 == None)
+        assert "doesn't exist" in node_1_3.query_and_get_error("SYSTEM DROP REPLICA 'node_1_1' FROM DATABASE test1")
 
         node_1_3.query("SYSTEM DROP REPLICA 'node_1_1'")
         exists_replica_1_1 = zk.exists("/clickhouse/tables/test3/{shard}/replicated/test_table/replicas/{replica}".format(shard=1, replica='node_1_1'))
         assert (exists_replica_1_1 != None)
+
+        ## If you want to drop a inactive/stale replicate table that does not have a local replica, you can following syntax(ZKPATH):
+        node_1_3.query("SYSTEM DROP REPLICA 'node_1_1' FROM ZKPATH '/clickhouse/tables/test2/{shard}/replicated/test_table'".format(shard=1))
+        exists_replica_1_1 = zk.exists("/clickhouse/tables/test2/{shard}/replicated/test_table/replicas/{replica}".format(shard=1, replica='node_1_1'))
+        assert (exists_replica_1_1 == None)
 
         node_1_2.query("SYSTEM DROP REPLICA 'node_1_1' FROM TABLE test.test_table")
         exists_replica_1_1 = zk.exists("/clickhouse/tables/test/{shard}/replicated/test_table/replicas/{replica}".format(shard=1, replica='node_1_1'))
