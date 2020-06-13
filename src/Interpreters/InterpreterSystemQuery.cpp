@@ -413,41 +413,25 @@ void InterpreterSystemQuery::dropReplicaByZKPath(ASTSystemQuery & query)
     for (auto & elem : catalog.getDatabases())
     {
         DatabasePtr & database = elem.second;
-        for (auto iterator = database->getTablesIterator(); iterator->isValid(); iterator->next())
+        for (auto iterator = database->getTablesIterator(context); iterator->isValid(); iterator->next())
         {
             if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
             {
                 storage_replicated->getStatus(status);
-                if (to_drop_path.compare(status.replica_path) == 0)
-                    throw Exception("We can't drop local replica, please use `DROP TABLE` if you want to clean the data and drop this replica",
-                        ErrorCodes::LOGICAL_ERROR);
+
+                if (status.replica_path.compare(query.replica_zk_path + "/replicas/" + status.replica_name) == 0)
+                {
+                    storage_replicated->dropReplica(query.replica, false);
+                    return;
+                }
             }
         }
     }
+    auto remote_replica_path = query.replica_zk_path  + "/replicas" + "/" + query.replica;
+    LOG_INFO(log, "Removing replica {}", remote_replica_path);
+    /// It may left some garbage if replica_path subtree are concurently modified
     auto zookeeper = context.getZooKeeper();
-
-    //check if is active replica if we drop other replicas
-    if (zookeeper->exists(to_drop_path + "/is_active"))
-        throw Exception("Can't remove replica: " + query.replica + ", because it's active",
-            ErrorCodes::LOGICAL_ERROR);
-
-    LOG_INFO(log, "Removing replica " << to_drop_path);
-    /// It may left some garbage if to_drop_path subtree are concurently modified
-    zookeeper->tryRemoveRecursive(to_drop_path);
-    if (zookeeper->exists(to_drop_path))
-        LOG_ERROR(log, "Replica was not completely removed from ZooKeeper, "
-                    << to_drop_path << " still exists and may contain some garbage.");
-
-    /// Check that `query.replica_zk_path` exists: it could have been deleted by another replica after execution of previous line.
-    Strings replicas;
-    if (zookeeper->tryGetChildren(query.replica_zk_path + "/replicas", replicas) == Coordination::ZOK && replicas.empty())
-    {
-        LOG_INFO(log, "Removing zookeeper path " << query.replica_zk_path << " (this might take several minutes)");
-        zookeeper->tryRemoveRecursive(query.replica_zk_path);
-        if (zookeeper->exists(query.replica_zk_path))
-            LOG_ERROR(log, "Table was not completely removed from ZooKeeper, "
-                        << query.replica_zk_path << " still exists and may contain some garbage.");
-    }
+    zookeeper->tryRemoveRecursive(remote_replica_path);
 }
 
 void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
@@ -455,11 +439,11 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
     if (!table_id.empty())
     {
         context.checkAccess(AccessType::SYSTEM_DROP_REPLICA, table_id);
-        StoragePtr table = DatabaseCatalog::instance().getTable(table_id);
+        StoragePtr table = DatabaseCatalog::instance().getTable(table_id, context);
 
         if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(table.get()))
         {
-            storage_replicated->dropReplica(query.replica);
+            storage_replicated->dropReplica(query.replica, false);
             LOG_TRACE(log, "DROP REPLICA " + table_id.getNameForLogs() +  " [" + query.replica + "]: OK");
         }
         else
@@ -472,12 +456,12 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
         if (it != databases.end())
         {
             DatabasePtr & database = it->second;
-            for (auto iterator = database->getTablesIterator(); iterator->isValid(); iterator->next())
+            for (auto iterator = database->getTablesIterator(context); iterator->isValid(); iterator->next())
             {
                 if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
                 {
                     context.checkAccess(AccessType::SYSTEM_DROP_REPLICA, iterator->table()->getStorageID());
-                    storage_replicated->dropReplica(query.replica);
+                    storage_replicated->dropReplica(query.replica, false);
                 }
             }
             LOG_TRACE(log, "DROP REPLICA " + query.replica + " DATABSE " +  database->getDatabaseName() + ": OK");
@@ -496,12 +480,12 @@ void InterpreterSystemQuery::dropReplica(ASTSystemQuery & query)
         for (auto & elem : databases)
         {
             DatabasePtr & database = elem.second;
-            for (auto iterator = database->getTablesIterator(); iterator->isValid(); iterator->next())
+            for (auto iterator = database->getTablesIterator(context); iterator->isValid(); iterator->next())
             {
                 if (auto * storage_replicated = dynamic_cast<StorageReplicatedMergeTree *>(iterator->table().get()))
                 {
                     context.checkAccess(AccessType::SYSTEM_DROP_REPLICA, iterator->table()->getStorageID());
-                    storage_replicated->dropReplica(query.replica);
+                    storage_replicated->dropReplica(query.replica, false);
                 }
             }
             LOG_TRACE(log, "DROP REPLICA " + query.replica + " DATABSE " +  database->getDatabaseName() + ": OK");

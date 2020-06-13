@@ -618,106 +618,6 @@ void StorageReplicatedMergeTree::createReplica()
     } while (code == Coordination::Error::ZBADVERSION);
 }
 
-void StorageReplicatedMergeTree::drop()
-{
-    {
-        auto zookeeper = tryGetZooKeeper();
-
-        if (is_readonly || !zookeeper)
-            throw Exception("Can't drop readonly replicated table (need to drop data in ZooKeeper as well)", ErrorCodes::TABLE_IS_READ_ONLY);
-
-        shutdown();
-
-        if (zookeeper->expired())
-            throw Exception("Table was not dropped because ZooKeeper session has expired.", ErrorCodes::TABLE_WAS_NOT_DROPPED);
-
-        LOG_INFO(log, "Removing replica {}", replica_path);
-        replica_is_active_node = nullptr;
-        /// It may left some garbage if replica_path subtree are concurently modified
-        zookeeper->tryRemoveRecursive(replica_path);
-        if (zookeeper->exists(replica_path))
-            LOG_ERROR(log, "Replica was not completely removed from ZooKeeper, {} still exists and may contain some garbage.", replica_path);
-
-        /// Check that `zookeeper_path` exists: it could have been deleted by another replica after execution of previous line.
-        Strings replicas;
-        if (Coordination::Error::ZOK == zookeeper->tryGetChildren(zookeeper_path + "/replicas", replicas) && replicas.empty())
-        {
-            LOG_INFO(log, "{} is the last replica, will remove table", replica_path);
-
-            /** At this moment, another replica can be created and we cannot remove the table.
-              * Try to remove /replicas node first. If we successfully removed it,
-              * it guarantees that we are the only replica that proceed to remove the table
-              * and no new replicas can be created after that moment (it requires the existence of /replicas node).
-              * and table cannot be recreated with new /replicas node on another servers while we are removing data,
-              * because table creation is executed in single transaction that will conflict with remaining nodes.
-              */
-
-            Coordination::Requests ops;
-            Coordination::Responses responses;
-            ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path + "/replicas", -1));
-            ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/dropped", "", zkutil::CreateMode::Persistent));
-            Coordination::Error code = zookeeper->tryMulti(ops, responses);
-
-            if (code == Coordination::Error::ZNONODE || code == Coordination::Error::ZNODEEXISTS)
-            {
-                LOG_WARNING(log, "Table {} is already started to be removing by another replica right now", replica_path);
-            }
-            else if (code == Coordination::Error::ZNOTEMPTY)
-            {
-                LOG_WARNING(log, "Another replica was suddenly created, will keep the table {}", replica_path);
-            }
-            else if (code != Coordination::Error::ZOK)
-            {
-                zkutil::KeeperMultiException::check(code, ops, responses);
-            }
-            else
-            {
-                LOG_INFO(log, "Removing table {} (this might take several minutes)", zookeeper_path);
-
-                Strings children;
-                code = zookeeper->tryGetChildren(zookeeper_path, children);
-                if (code == Coordination::Error::ZNONODE)
-                {
-                    LOG_WARNING(log, "Table {} is already finished removing by another replica right now", replica_path);
-                }
-                else
-                {
-                    for (const auto & child : children)
-                        if (child != "dropped")
-                            zookeeper->tryRemoveRecursive(zookeeper_path + "/" + child);
-
-                    ops.clear();
-                    responses.clear();
-                    ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path + "/dropped", -1));
-                    ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path, -1));
-                    code = zookeeper->tryMulti(ops, responses);
-
-                    if (code == Coordination::Error::ZNONODE)
-                    {
-                        LOG_WARNING(log, "Table {} is already finished removing by another replica right now", replica_path);
-                    }
-                    else if (code == Coordination::Error::ZNOTEMPTY)
-                    {
-                        LOG_ERROR(log, "Table was not completely removed from ZooKeeper, {} still exists and may contain some garbage.",
-                            zookeeper_path);
-                    }
-                    else if (code != Coordination::Error::ZOK)
-                    {
-                        /// It is still possible that ZooKeeper session is expired or server is killed in the middle of the delete operation.
-                        zkutil::KeeperMultiException::check(code, ops, responses);
-                    }
-                    else
-                    {
-                        LOG_INFO(log, "Table {} was successfully removed from ZooKeeper", zookeeper_path);
-                    }
-                }
-            }
-        }
-    }
-
-    dropAllData();
-}
-
 
 /** Verify that list of columns and table storage_settings_ptr match those specified in ZK (/ metadata).
     * If not, throw an exception.
@@ -815,37 +715,109 @@ static time_t tryGetPartCreateTime(zkutil::ZooKeeperPtr & zookeeper, const Strin
 }
 
 
-void StorageReplicatedMergeTree::removeReplica(const String & replica)
+void StorageReplicatedMergeTree::dropReplica(const String & replica, bool is_drop_table)
 {
     auto zookeeper = tryGetZooKeeper();
+
+    if (is_readonly || !zookeeper)
+        throw Exception("Can't drop readonly replicated table (need to drop data in ZooKeeper as well)", ErrorCodes::TABLE_IS_READ_ONLY);
+
     if (zookeeper->expired())
         throw Exception("Table was not dropped because ZooKeeper session has expired.", ErrorCodes::TABLE_WAS_NOT_DROPPED);
 
-    auto to_drop_path = zookeeper_path + "/replicas/" + replica;
-
-    //check if is active replica if we drop other replicas
-    if (replica != replica_name && zookeeper->exists(to_drop_path + "/is_active"))
+    if (is_drop_table)
+        replica_is_active_node = nullptr;
+    else
     {
-        throw Exception("Can't remove replica: " + replica + ", because it's active",
+        if (replica == replica_name)
+            throw Exception("We can't drop local replica, please use `DROP TABLE` if you want to clean the data and drop this replica", ErrorCodes::LOGICAL_ERROR);
+        if (zookeeper->exists(zookeeper_path + "/replicas/" + replica + "/is_active"))
+            throw Exception("Can't drop replica: " + replica + ", because it's active",
             ErrorCodes::LOGICAL_ERROR);
     }
 
-    LOG_INFO(log, "Removing replica " << to_drop_path);
-    /// It may left some garbage if to_drop_path subtree are concurently modified
-    zookeeper->tryRemoveRecursive(to_drop_path);
-    if (zookeeper->exists(to_drop_path))
-        LOG_ERROR(log, "Replica was not completely removed from ZooKeeper, "
-                    << to_drop_path << " still exists and may contain some garbage.");
+
+    auto remote_replica_path = zookeeper_path + "/replicas" + "/" + replica;
+    LOG_INFO(log, "Removing replica {}", remote_replica_path);
+    /// It may left some garbage if replica_path subtree are concurently modified
+    zookeeper->tryRemoveRecursive(remote_replica_path);
+    if (zookeeper->exists(remote_replica_path))
+        LOG_ERROR(log, "Replica was not completely removed from ZooKeeper, {} still exists and may contain some garbage.", remote_replica_path);
 
     /// Check that `zookeeper_path` exists: it could have been deleted by another replica after execution of previous line.
     Strings replicas;
-    if (zookeeper->tryGetChildren(zookeeper_path + "/replicas", replicas) == Coordination::ZOK && replicas.empty())
+    if (Coordination::Error::ZOK == zookeeper->tryGetChildren(zookeeper_path + "/replicas", replicas) && replicas.empty())
     {
-        LOG_INFO(log, "Removing table " << zookeeper_path << " (this might take several minutes)");
-        zookeeper->tryRemoveRecursive(zookeeper_path);
-        if (zookeeper->exists(zookeeper_path))
-            LOG_ERROR(log, "Table was not completely removed from ZooKeeper, "
-                        << zookeeper_path << " still exists and may contain some garbage.");
+        LOG_INFO(log, "{} is the last replica, will remove table", remote_replica_path);
+
+        /** At this moment, another replica can be created and we cannot remove the table.
+             * Try to remove /replicas node first. If we successfully removed it,
+             * it guarantees that we are the only replica that proceed to remove the table
+             * and no new replicas can be created after that moment (it requires the existence of /replicas node).
+             * and table cannot be recreated with new /replicas node on another servers while we are removing data,
+             * because table creation is executed in single transaction that will conflict with remaining nodes.
+             */
+
+        Coordination::Requests ops;
+        Coordination::Responses responses;
+        ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path + "/replicas", -1));
+        ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/dropped", "", zkutil::CreateMode::Persistent));
+        Coordination::Error code = zookeeper->tryMulti(ops, responses);
+
+        if (code == Coordination::Error::ZNONODE || code == Coordination::Error::ZNODEEXISTS)
+        {
+            LOG_WARNING(log, "Table {} is already started to be removing by another replica right now", remote_replica_path);
+        }
+        else if (code == Coordination::Error::ZNOTEMPTY)
+        {
+            LOG_WARNING(log, "Another replica was suddenly created, will keep the table {}", remote_replica_path);
+        }
+        else if (code != Coordination::Error::ZOK)
+        {
+            zkutil::KeeperMultiException::check(code, ops, responses);
+        }
+        else
+        {
+            LOG_INFO(log, "Removing table {} (this might take several minutes)", zookeeper_path);
+
+            Strings children;
+            code = zookeeper->tryGetChildren(zookeeper_path, children);
+            if (code == Coordination::Error::ZNONODE)
+            {
+                LOG_WARNING(log, "Table {} is already finished removing by another replica right now", remote_replica_path);
+            }
+            else
+            {
+                for (const auto & child : children)
+                    if (child != "dropped")
+                        zookeeper->tryRemoveRecursive(zookeeper_path + "/" + child);
+
+                ops.clear();
+                responses.clear();
+                ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path + "/dropped", -1));
+                ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path, -1));
+                code = zookeeper->tryMulti(ops, responses);
+
+                if (code == Coordination::Error::ZNONODE)
+                {
+                    LOG_WARNING(log, "Table {} is already finished removing by another replica right now", remote_replica_path);
+                }
+                else if (code == Coordination::Error::ZNOTEMPTY)
+                {
+                    LOG_ERROR(log, "Table was not completely removed from ZooKeeper, {} still exists and may contain some garbage.",
+                        zookeeper_path);
+                }
+                else if (code != Coordination::Error::ZOK)
+                {
+                    /// It is still possible that ZooKeeper session is expired or server is killed in the middle of the delete operation.
+                    zkutil::KeeperMultiException::check(code, ops, responses);
+                }
+                else
+                {
+                    LOG_INFO(log, "Table {} was successfully removed from ZooKeeper", zookeeper_path);
+                }
+            }
+        }
     }
 }
 
@@ -4066,27 +4038,15 @@ void StorageReplicatedMergeTree::drop()
 {
     {
         auto zookeeper = tryGetZooKeeper();
-
         if (is_readonly || !zookeeper)
             throw Exception("Can't drop readonly replicated table (need to drop data in ZooKeeper as well)", ErrorCodes::TABLE_IS_READ_ONLY);
+        shutdown();
+        dropReplica(replica_name, true);
     }
-    shutdown();
-    replica_is_active_node = nullptr;
-    removeReplica(replica_name);
 
     dropAllData();
 }
 
-void StorageReplicatedMergeTree::dropReplica(const String & replica)
-{
-    if (replica_name == replica)
-    {
-        throw Exception("We can't drop local replica, please use `DROP TABLE` if you want to clean the data and drop this replica",
-            ErrorCodes::LOGICAL_ERROR);
-    }
-    // remove other replicas
-    removeReplica(replica);
-}
 
 void StorageReplicatedMergeTree::rename(const String & new_path_to_table_data, const StorageID & new_table_id)
 {
