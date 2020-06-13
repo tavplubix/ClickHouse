@@ -5,13 +5,13 @@ toc_title: SYSTEM
 
 # SYSTEM Queries {#query-language-system}
 
--   [RELOAD EMBEDDED DICTIONARIES](#query_language-system-reload-emdedded-dictionaries) 
+-   [RELOAD EMBEDDED DICTIONARIES](#query_language-system-reload-emdedded-dictionaries)
 -   [RELOAD DICTIONARIES](#query_language-system-reload-dictionaries)
 -   [RELOAD DICTIONARY](#query_language-system-reload-dictionary)
 -   [DROP DNS CACHE](#query_language-system-drop-dns-cache)
 -   [DROP MARK CACHE](#query_language-system-drop-mark-cache)
 -   [DROP REPLICA](#query_language-system-drop-replica-table)
--   [DROP UNCOMPRESSED CACHE](#query_language-system-drop-uncompressed-cache) 
+-   [DROP UNCOMPRESSED CACHE](#query_language-system-drop-uncompressed-cache)
 -   [DROP COMPILED EXPRESSION CACHE](#query_language-system-drop-compiled-expression-cache)
 -   [FLUSH LOGS](#query_language-system-flush_logs)
 -   [RELOAD CONFIG](#query_language-system-reload-config)
@@ -22,10 +22,10 @@ toc_title: SYSTEM
 -   [START DISTRIBUTED SENDS](#query_language-system-start-distributed-sends)
 -   [STOP MERGES](#query_language-system-stop-merges)
 -   [START MERGES](#query_language-system-start-merges)
--   [STOP TTL MERGES](#query_language-stop-ttl-merges) 
--   [START TTL MERGES](#query_language-start-ttl-merges) 
--   [STOP MOVES](#query_language-stop-moves) 
--   [START MOVES](#query_language-start-moves) 
+-   [STOP TTL MERGES](#query_language-stop-ttl-merges)
+-   [START TTL MERGES](#query_language-start-ttl-merges)
+-   [STOP MOVES](#query_language-stop-moves)
+-   [START MOVES](#query_language-start-moves)
 -   [STOP FETCHES](#query_language-system-stop-fetches)
 -   [START FETCHES](#query_language-system-start-fetches)
 -   [STOP REPLICATED SENDS](#query_language-system-start-replicated-sends)
@@ -34,13 +34,13 @@ toc_title: SYSTEM
 -   [START REPLICATION QUEUES](#query_language-system-start-replication-queues)
 -   [SYNC REPLICA](#query_language-system-sync-replica)
 -   [RESTART REPLICA](#query_language-system-restart-replica)
--   [RESTART REPLICAS](#query_language-system-restart-replicas) 
+-   [RESTART REPLICAS](#query_language-system-restart-replicas)
 
-## RELOAD EMBEDDED DICTIONARIES] {#query_language-system-reload-emdedded-dictionaries} 
+## RELOAD EMBEDDED DICTIONARIES] {#query_language-system-reload-emdedded-dictionaries}
 Reload all [Internal dictionaries](../dictionaries/internal-dicts.md).
-By default, internal dictionaries are disabled. 
+By default, internal dictionaries are disabled.
 Always returns `Ok.` regardless of the result of the internal dictionary update.
-   
+
 ## RELOAD DICTIONARIES {#query_language-system-reload-dictionaries}
 
 Reloads all dictionaries that have been successfully loaded before.
@@ -68,7 +68,7 @@ For more convenient (automatic) cache management, see disable\_internal\_dns\_ca
 Resets the mark cache. Used in development of ClickHouse and performance tests.
 
 
-## DROP REPLICA {query_language-system-drop-replica-table}
+## DROP REPLICA {#query_language-system-drop-replica-table}
 
 Replicas can be dropped using following syntax:
 
@@ -172,7 +172,7 @@ Return `Ok.` even table doesn't exists or table have not MergeTree engine. Retur
 SYSTEM STOP TTL MERGES [[db.]merge_tree_family_table_name]
 ```
 
-### START TTL MERGES {#query_language-start-ttl-merges} 
+### START TTL MERGES {#query_language-start-ttl-merges}
 
 Provides possibility to start background delete old data according to [TTL expression](../../engines/table-engines/mergetree-family/mergetree.md#table_engine-mergetree-ttl) for tables in the MergeTree family:
 Return `Ok.` even table doesn't exists. Return error when database doesn't exists:
@@ -181,7 +181,7 @@ Return `Ok.` even table doesn't exists. Return error when database doesn't exist
 SYSTEM START TTL MERGES [[db.]merge_tree_family_table_name]
 ```
 
-### STOP MOVES {#query_language-stop-moves} 
+### STOP MOVES {#query_language-stop-moves}
 
 Provides possibility to stop background move data according to [TTL table expression with TO VOLUME or TO DISK clause](../../engines/table-engines/mergetree-family/mergetree.md#mergetree-table-ttl) for tables in the MergeTree family:
 Return `Ok.` even table doesn't exists. Return error when database doesn't exists:
@@ -190,7 +190,7 @@ Return `Ok.` even table doesn't exists. Return error when database doesn't exist
 SYSTEM STOP MOVES [[db.]merge_tree_family_table_name]
 ```
 
-### START MOVES {#query_language-start-moves} 
+### START MOVES {#query_language-start-moves}
 
 Provides possibility to start background move data according to [TTL table expression with TO VOLUME and TO DISK clause](../../engines/table-engines/mergetree-family/mergetree.md#mergetree-table-ttl) for tables in the MergeTree family:
 Return `Ok.` even table doesn't exists. Return error when database doesn't exists:
@@ -234,14 +234,14 @@ SYSTEM START REPLICATED SENDS [[db.]replicated_merge_tree_family_table_name]
 ```
 
 ### STOP REPLICATION QUEUES {#query_language-system-stop-replication-queues}
-Provides possibility to stop background fetch tasks from replication queues which stored in Zookeeper for tables in the `ReplicatedMergeTree` family. Possible background tasks types - merges, fetches, mutation, DDL statements with ON CLUSTER clause: 
+Provides possibility to stop background fetch tasks from replication queues which stored in Zookeeper for tables in the `ReplicatedMergeTree` family. Possible background tasks types - merges, fetches, mutation, DDL statements with ON CLUSTER clause:
 
 ``` sql
 SYSTEM STOP REPLICATION QUEUES [[db.]replicated_merge_tree_family_table_name]
 ```
 
 ### START REPLICATION QUEUES {#query_language-system-start-replication-queues}
-Provides possibility to start background fetch tasks from replication queues which stored in Zookeeper for tables in the `ReplicatedMergeTree` family. Possible background tasks types - merges, fetches, mutation, DDL statements with ON CLUSTER clause: 
+Provides possibility to start background fetch tasks from replication queues which stored in Zookeeper for tables in the `ReplicatedMergeTree` family. Possible background tasks types - merges, fetches, mutation, DDL statements with ON CLUSTER clause:
 
 ``` sql
 SYSTEM START REPLICATION QUEUES [[db.]replicated_merge_tree_family_table_name]
@@ -255,7 +255,7 @@ SYSTEM SYNC REPLICA [db.]replicated_merge_tree_family_table_name
 ```
 
 ### RESTART REPLICA {#query_language-system-restart-replica}
-Provides possibility to reinitialize Zookeeper sessions state for `ReplicatedMergeTree` table, will compare current state with Zookeeper as source of true and add tasks to Zookeeper queue if needed  
+Provides possibility to reinitialize Zookeeper sessions state for `ReplicatedMergeTree` table, will compare current state with Zookeeper as source of true and add tasks to Zookeeper queue if needed
 Initialization replication quene based on ZooKeeper date happens in the same way as `ATTACH TABLE` statement. For a short time the table will be unavailable for any operations.
 
 ``` sql
@@ -263,7 +263,7 @@ SYSTEM RESTART REPLICA [db.]replicated_merge_tree_family_table_name
 ```
 
 ### RESTART REPLICAS {#query_language-system-restart-replicas}
-Provides possibility to reinitialize Zookeeper sessions state for all `ReplicatedMergeTree` tables, will compare current state with Zookeeper as source of true and add tasks to Zookeeper queue if needed  
+Provides possibility to reinitialize Zookeeper sessions state for all `ReplicatedMergeTree` tables, will compare current state with Zookeeper as source of true and add tasks to Zookeeper queue if needed
 
 ``` sql
 SYSTEM RESTART QUEUES [db.]replicated_merge_tree_family_table_name
