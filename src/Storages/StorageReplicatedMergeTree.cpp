@@ -583,7 +583,6 @@ void StorageReplicatedMergeTree::createReplica()
     } while (code == Coordination::Error::ZBADVERSION);
 }
 
-
 void StorageReplicatedMergeTree::removeReplica(const String & replica)
 {
     auto zookeeper = tryGetZooKeeper();
@@ -3764,7 +3763,6 @@ void StorageReplicatedMergeTree::dropReplica(const String & replica)
     // remove other replicas
     removeReplica(replica);
 }
-
 
 void StorageReplicatedMergeTree::rename(const String & new_path_to_table_data, const StorageID & new_table_id)
 {
