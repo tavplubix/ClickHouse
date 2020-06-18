@@ -19,12 +19,12 @@
 #include <Storages/MergeTree/BackgroundProcessingPool.h>
 #include <Storages/MergeTree/DataPartsExchange.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
+#include <Storages/MergeTree/LeaderElection.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/PartLog.h>
 #include <Common/randomSeed.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
-#include <Common/ZooKeeper/LeaderElection.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Processors/Pipe.h>
 
@@ -214,6 +214,8 @@ private:
 
     /// If true, the table is offline and can not be written to it.
     std::atomic_bool is_readonly {false};
+    /// If false - ZooKeeper is available, but there is no table metadata. It's safe to drop table in this case.
+    bool has_metadata_in_zookeeper = true;
 
     String zookeeper_path;
     String replica_name;
@@ -224,6 +226,7 @@ private:
     zkutil::EphemeralNodeHolderPtr replica_is_active_node;
 
     /** Is this replica "leading". The leader replica selects the parts to merge.
+      * It can be false only when old ClickHouse versions are working on the same cluster, because now we allow multiple leaders.
       */
     std::atomic<bool> is_leader {false};
     zkutil::LeaderElectionPtr leader_election;
@@ -499,6 +502,7 @@ private:
     bool waitForReplicaToProcessLogEntry(const String & replica_name, const ReplicatedMergeTreeLogEntryData & entry, bool wait_for_non_active = true);
 
     /// Choose leader replica, send requst to it and wait.
+    /// Only makes sense when old ClickHouse versions are working on the same cluster, because now we allow multiple leaders.
     void sendRequestToLeaderReplica(const ASTPtr & query, const Context & query_context);
 
     /// Throw an exception if the table is readonly.
@@ -552,7 +556,7 @@ protected:
         bool attach,
         const StorageID & table_id_,
         const String & relative_data_path_,
-        const StorageInMemoryMetadata & metadata,
+        const StorageInMemoryMetadata & metadata_,
         Context & context_,
         const String & date_column_name,
         const MergingParams & merging_params_,
