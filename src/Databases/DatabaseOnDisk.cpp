@@ -367,6 +367,7 @@ ASTPtr DatabaseOnDisk::getCreateDatabaseQuery() const
 
 void DatabaseOnDisk::drop(const Context & context)
 {
+    LOG_WARNING(log, "Drop, {} tables", tables.size());
     Poco::File(context.getPath() + getDataPath()).remove(false);
     Poco::File(getMetadataPath()).remove(false);
 }

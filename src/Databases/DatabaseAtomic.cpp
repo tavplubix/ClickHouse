@@ -82,6 +82,7 @@ void DatabaseAtomic::attachTable(const String & name, const StoragePtr & table, 
     assert(relative_table_path != data_path && !relative_table_path.empty());
     DetachedTables not_in_use;
     std::unique_lock lock(mutex);
+    assertDatabaseStartedUp();
     not_in_use = cleenupDetachedTables();
     auto table_id = table->getStorageID();
     assertDetachedTableNotInUse(table_id.uuid);
@@ -93,6 +94,7 @@ StoragePtr DatabaseAtomic::detachTable(const String & name)
 {
     DetachedTables not_in_use;
     std::unique_lock lock(mutex);
+    assertDatabaseStartedUp();
     auto table = DatabaseWithDictionaries::detachTableUnlocked(name, lock);
     table_name_to_path.erase(name);
     detached_tables.emplace(table->getStorageID().uuid, table);
@@ -107,6 +109,7 @@ void DatabaseAtomic::dropTable(const Context &, const String & table_name, bool 
     StoragePtr table;
     {
         std::unique_lock lock(mutex);
+        assertDatabaseStartedUp();
         table = getTableUnlocked(table_name, lock);
         table_metadata_path_drop = DatabaseCatalog::instance().getPathForDroppedMetadata(table->getStorageID());
         Poco::File(table_metadata_path).renameTo(table_metadata_path_drop);    /// Mark table as dropped
@@ -260,6 +263,7 @@ void DatabaseAtomic::commitCreateTable(const ASTCreateQuery & query, const Stora
         if (query.database != database_name)
             throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create table in `{}`",
                             database_name, query.database);
+        assertDatabaseStartedUp();
         not_in_use = cleenupDetachedTables();
         assertDetachedTableNotInUse(query.uuid);
         renameNoReplace(table_metadata_tmp_path, table_metadata_path);
@@ -371,6 +375,8 @@ void DatabaseAtomic::loadStoredObjects(Context & context, bool has_force_restore
         for (const auto & table : table_names)
             tryCreateSymlink(table.first, table.second);
     }
+
+    //started_up = true;
 }
 
 void DatabaseAtomic::tryCreateSymlink(const String & table_name, const String & actual_data_path)

@@ -57,6 +57,7 @@ DatabaseTablesIteratorPtr DatabaseWithOwnTablesBase::getTablesIterator(const Con
 bool DatabaseWithOwnTablesBase::empty() const
 {
     std::lock_guard lock(mutex);
+    LOG_WARNING(log, "Check empty, {} tables", tables.size());
     return tables.empty();
 }
 
@@ -68,6 +69,8 @@ StoragePtr DatabaseWithOwnTablesBase::detachTable(const String & table_name)
 
 StoragePtr DatabaseWithOwnTablesBase::detachTableUnlocked(const String & table_name, std::unique_lock<std::mutex> &)
 {
+    LOG_WARNING(log, "Detaching {}", table_name);
+    assertDatabaseStartedUp();
     StoragePtr res;
 
     auto it = tables.find(table_name);
@@ -84,6 +87,7 @@ StoragePtr DatabaseWithOwnTablesBase::detachTableUnlocked(const String & table_n
         DatabaseCatalog::instance().removeUUIDMapping(table_id.uuid);
     }
 
+    LOG_WARNING(log, "Detached {}", table_name);
     return res;
 }
 
@@ -95,6 +99,8 @@ void DatabaseWithOwnTablesBase::attachTable(const String & table_name, const Sto
 
 void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, const StoragePtr & table, std::unique_lock<std::mutex> &)
 {
+    LOG_WARNING(log, "Attaching {}", table_name);
+    assertDatabaseStartedUp();
     auto table_id = table->getStorageID();
     if (table_id.database_name != database_name)
         throw Exception(ErrorCodes::UNKNOWN_DATABASE, "Database was renamed to `{}`, cannot create table in `{}`",
@@ -108,12 +114,16 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
         assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getEngineName() == "Atomic");
         DatabaseCatalog::instance().addUUIDMapping(table_id.uuid, shared_from_this(), table);
     }
+    LOG_WARNING(log, "Attached {}", table_name);
 }
 
 void DatabaseWithOwnTablesBase::shutdown()
 {
+    LOG_WARNING(log, "Shutdown 1");
     /// You can not hold a lock during shutdown.
     /// Because inside `shutdown` function tables can work with database, and mutex is not recursive.
+
+    started_up = false;
 
     Tables tables_snapshot;
     {
@@ -134,6 +144,8 @@ void DatabaseWithOwnTablesBase::shutdown()
 
     std::lock_guard lock(mutex);
     tables.clear();
+
+    LOG_WARNING(log, "Shutdown 2");
 }
 
 DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
@@ -155,6 +167,13 @@ StoragePtr DatabaseWithOwnTablesBase::getTableUnlocked(const String & table_name
         return it->second;
     throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist.",
                     backQuote(database_name), backQuote(table_name));
+}
+
+void DatabaseWithOwnTablesBase::assertDatabaseStartedUp() const
+{
+    //if (!started_up)
+    //    throw Exception("Database is not started up.", ErrorCodes::UNKNOWN_DATABASE);
+    DatabaseCatalog::instance().assertDatabaseExists(database_name);
 }
 
 }

@@ -313,6 +313,7 @@ time_t DatabaseWithDictionaries::getObjectMetadataModificationTime(const String 
 bool DatabaseWithDictionaries::empty() const
 {
     std::lock_guard lock{mutex};
+    LOG_WARNING(log, "Check empty, {} tables", tables.size());
     return tables.empty() && dictionaries.empty();
 }
 

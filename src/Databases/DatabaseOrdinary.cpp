@@ -191,6 +191,8 @@ void DatabaseOrdinary::loadStoredObjects(Context & context, bool has_force_resto
             logAboutProgress(log, ++dictionaries_processed, total_dictionaries, watch);
         }
     }
+
+    started_up = true;
 }
 
 
