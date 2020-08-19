@@ -31,6 +31,8 @@ public:
     /// Get the main function name.
     virtual std::string getName() const = 0;
 
+    virtual ColumnsDescription getTableStructure(const ASTPtr & ast_function, const Context & context) const { return {}; }
+
     /// Create storage according to the query.
     StoragePtr execute(const ASTPtr & ast_function, const Context & context, const std::string & table_name) const;
 
