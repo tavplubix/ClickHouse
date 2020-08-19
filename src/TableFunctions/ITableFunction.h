@@ -2,6 +2,7 @@
 
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/ColumnsDescription.h>
 
 #include <memory>
 #include <string>
@@ -31,7 +32,7 @@ public:
     /// Get the main function name.
     virtual std::string getName() const = 0;
 
-    virtual ColumnsDescription getTableStructure(const ASTPtr & ast_function, const Context & context) const { return {}; }
+    virtual ColumnsDescription getTableStructure(const ASTPtr & /*ast_function*/, const Context & /*context*/) { return {}; }
 
     /// Create storage according to the query.
     StoragePtr execute(const ASTPtr & ast_function, const Context & context, const std::string & table_name) const;

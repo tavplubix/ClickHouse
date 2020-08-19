@@ -165,7 +165,8 @@ protected:
         const ASTPtr & sharding_key_,
         const String & storage_policy_name_,
         const String & relative_data_path_,
-        bool attach_);
+        bool attach_,
+        ClusterPtr owned_cluster_ = {});
 
     StorageDistributed(
         const StorageID & id_,
@@ -177,7 +178,8 @@ protected:
         const ASTPtr & sharding_key_,
         const String & storage_policy_name_,
         const String & relative_data_path_,
-        bool attach);
+        bool attach,
+        ClusterPtr owned_cluster_ = {});
 
     String relative_data_path;
 
