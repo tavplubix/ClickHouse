@@ -102,6 +102,7 @@ StorageDictionary::StorageDictionary(
     , dictionary_name(dictionary_name_)
     , location(location_)
 {
+    assert(location != Location::SameDatabaseAndNameAsDictionary);
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(columns_);
     setInMemoryMetadata(storage_metadata);
@@ -112,6 +113,29 @@ StorageDictionary::StorageDictionary(
     const StorageID & table_id_, const String & dictionary_name_, const DictionaryStructure & dictionary_structure_, Location location_)
     : StorageDictionary(table_id_, dictionary_name_, ColumnsDescription{getNamesAndTypes(dictionary_structure_)}, location_)
 {
+}
+
+StorageDictionary::StorageDictionary(
+    const StorageID & table_id_,
+    DictionaryAttachInfo attach_info_,
+    //const ASTPtr & create,
+    const Context & global_context)
+    : IStorage(table_id_)
+    , dictionary_name(table_id_.getInternalDictionaryName())
+    , location(Location::SameDatabaseAndNameAsDictionary)
+    , attach_info(attach_info_)
+{
+    StorageInMemoryMetadata storage_metadata;
+    storage_metadata.setColumns(getNamesAndTypes(DictionaryStructure{*(attach_info->config), "dictionary.structure"}));
+    setInMemoryMetadata(storage_metadata);
+
+    bool lazy_load = global_context.getConfigRef().getBool("dictionaries_lazy_load", true);
+    if (!lazy_load)
+    {
+        /// load() is called here to force loading the dictionary, wait until the loading is finished,
+        /// and throw an exception if the loading is failed.
+        loadOrReload();
+    }
 }
 
 
@@ -136,6 +160,11 @@ Pipe StorageDictionary::read(
     auto stream = dictionary->getBlockInputStream(column_names, max_block_size);
     /// TODO: update dictionary interface for processors.
     return Pipe(std::make_shared<SourceFromInputStream>(stream));
+}
+
+void StorageDictionary::loadOrReload()
+{
+    assert(location == Location::SameDatabaseAndNameAsDictionary);
 }
 
 

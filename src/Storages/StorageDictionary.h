@@ -6,7 +6,11 @@
 
 namespace DB
 {
+
+struct DictionaryAttachInfo;
 struct DictionaryStructure;
+struct IDictionaryBase;
+using DictionarySharedPtr = std::shared_ptr<IDictionaryBase>;
 
 class StorageDictionary final : public ext::shared_ptr_helper<StorageDictionary>, public IStorage
 {
@@ -30,6 +34,10 @@ public:
 
     const String & dictionaryName() const { return dictionary_name; }
 
+    void loadOrReload();
+
+    DictionarySharedPtr getDictionary();
+
     /// Specifies where the table is located relative to the dictionary.
     enum class Location
     {
@@ -52,6 +60,9 @@ private:
     const String dictionary_name;
     const Location location;
 
+    std::optional<DictionaryAttachInfo> attach_info;
+    DictionarySharedPtr dictionary;
+
 protected:
     StorageDictionary(
         const StorageID & table_id_,
@@ -64,6 +75,15 @@ protected:
         const String & dictionary_name_,
         const DictionaryStructure & dictionary_structure,
         Location location_);
+
+
+    /// SameDatabaseAndNameAsDictionary
+    StorageDictionary(
+        const StorageID & table_id_,
+        DictionaryAttachInfo attach_info_,
+        //const ASTPtr & create,
+        const Context & global_context);
+
 };
 
 }
