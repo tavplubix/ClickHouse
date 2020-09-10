@@ -51,3 +51,5 @@ done
 
 $CLICKHOUSE_CLIENT -q "SELECT count() FROM mv;"
 wait
+
+$CLICKHOUSE_CLIENT -q "SHOW CREATE mv FORMAT TSVRaw;" | grep -F ".src"
