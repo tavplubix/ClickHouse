@@ -702,8 +702,7 @@ void DatabaseCatalog::enqueueDroppedTableCleanup(StorageID table_id, StoragePtr 
     else
         tables_marked_dropped.push_back({table_id, table, dropped_metadata_path, drop_time});
     tables_marked_dropped_ids.insert(table_id.uuid);
-    /// If list of dropped tables was empty, start a drop task
-    if (drop_task && tables_marked_dropped.size() == 1)
+    if (drop_task)
         (*drop_task)->schedule();
 }
 
