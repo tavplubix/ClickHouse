@@ -3,12 +3,12 @@
 #include <Core/QueryProcessingStage.h>
 #include <Storages/TableLockHolder.h>
 #include <DataStreams/StreamLocalLimits.h>
+#include <Storages/IStorage_fwd.h>
+
 
 namespace DB
 {
 
-class IStorage;
-using StoragePtr = std::shared_ptr<IStorage>;
 
 struct StorageInMemoryMetadata;
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;

@@ -2,6 +2,7 @@
 #include <Processors/IProcessor.h>
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <Storages/IStorage_fwd.h>
 
 namespace DB
 {
@@ -12,9 +13,6 @@ class Pipe;
 using Pipes = std::vector<Pipe>;
 
 class QueryPipeline;
-
-class IStorage;
-using StoragePtr = std::shared_ptr<IStorage>;
 
 using OutputPortRawPtrs = std::vector<OutputPort *>;
 

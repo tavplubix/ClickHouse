@@ -5,11 +5,13 @@ CLICKHOUSE_CLIENT_SERVER_LOGS_LEVEL=fatal
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../shell_config.sh
 
-$CLICKHOUSE_CLIENT --query "DROP DATABASE IF EXISTS test_01150"
-$CLICKHOUSE_CLIENT --query "CREATE DATABASE test_01150"
+CLICKHOUSE_CLIENT=$(echo ${CLICKHOUSE_CLIENT} | sed 's/'"--send_logs_level=${CLICKHOUSE_CLIENT_SERVER_LOGS_LEVEL}"'/--send_logs_level=none/g')
 
-$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t1 (x UInt64, s Array(Nullable(String))) ENGINE = Memory"
-$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t2 (x UInt64, s Array(Nullable(String))) ENGINE = Memory"
+$CLICKHOUSE_CLIENT --query "DROP DATABASE IF EXISTS test_01150" 2> /dev/null
+$CLICKHOUSE_CLIENT --query "CREATE DATABASE test_01150" 2> /dev/null
+
+$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t1 (x UInt64, s Array(Nullable(String))) ENGINE = Memory" 2> /dev/null
+$CLICKHOUSE_CLIENT --query "CREATE TABLE test_01150.t2 (x UInt64, s Array(Nullable(String))) ENGINE = Memory" 2> /dev/null
 
 function thread_detach_attach {
     while true; do
@@ -39,6 +41,6 @@ timeout 20 bash -c 'thread_rename' &
 wait
 sleep 1
 
-$CLICKHOUSE_CLIENT --query "DETACH DATABASE IF EXISTS test_01150"
-$CLICKHOUSE_CLIENT --query "ATTACH DATABASE IF NOT EXISTS test_01150"
-$CLICKHOUSE_CLIENT --query "DROP DATABASE test_01150";
+$CLICKHOUSE_CLIENT --query "DETACH DATABASE IF EXISTS test_01150" 2> /dev/null
+$CLICKHOUSE_CLIENT --query "ATTACH DATABASE IF NOT EXISTS test_01150" 2> /dev/null
+$CLICKHOUSE_CLIENT --query "DROP DATABASE test_01150" 2> /dev/null

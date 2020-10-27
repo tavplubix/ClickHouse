@@ -24,6 +24,18 @@ namespace ErrorCodes
     extern const int DEADLOCK_AVOIDED;
 }
 
+void KekPtr::logTrace(const String & desc, const String & func) const noexcept
+{
+    String trace;
+    if (auto * raw = get())
+    {
+        auto id = raw->getStorageID();
+        if (id.database_name == "test_01150" || id.table_name == "t1" || id.table_name == "t2")
+            trace = StackTrace().toString();
+    }
+    LOG_WARNING(getLogger(), "{}    {} {}, {}\n{}", func, desc, static_cast<void*>(get()), use_count(), trace);
+}
+
 bool IStorage::isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const
 {
     /// Virtual column maybe overridden by real column
