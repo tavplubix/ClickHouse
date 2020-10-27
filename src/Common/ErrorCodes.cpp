@@ -512,6 +512,7 @@ namespace ErrorCodes
     extern const int NO_ROW_DELIMITER = 546;
     extern const int INVALID_RAID_TYPE = 547;
     extern const int UNKNOWN_VOLUME = 548;
+    extern const int SYNC_MYSQL_USER_ACCESS_ERR = 549;
 
     extern const int KEEPER_EXCEPTION = 999;
     extern const int POCO_EXCEPTION = 1000;
