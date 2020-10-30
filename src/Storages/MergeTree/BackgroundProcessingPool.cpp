@@ -217,11 +217,8 @@ void BackgroundProcessingPool::workLoopFunc()
 
             if (task_result == TaskResult::SUCCESS)
                 task->count_no_work_done = 0;
-            else if (task_result == TaskResult::ERROR)
+            else
                 ++task->count_no_work_done;
-            /// NOTHING_TO_DO should not increment count_no_work_done
-            /// otherwise error after period of inactivity (lot of NOTHING_TO_DO)
-            /// leads to 5-10 min replication hang
 
             /// If task has done work, it could be executed again immediately.
             /// If not, add delay before next run.
