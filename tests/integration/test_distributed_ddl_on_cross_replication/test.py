@@ -12,6 +12,14 @@ node3 = cluster.add_instance('node3', main_configs=['configs/remote_servers.xml'
                              macros={"shard": 3, "replica": 1, "shard_bk": 2, "replica_bk": 2})
 
 
+node1_custom = cluster.add_instance('node1_custom', main_configs=['configs/remote_servers2.xml', 'configs/ddl_worker.xml'],
+                             with_zookeeper=True, macros={"shard": 1, "replica": 1, "shard_bk": 3, "replica_bk": 2})
+node2_custom = cluster.add_instance('node2_custom', main_configs=['configs/remote_servers2.xml', 'configs/ddl_worker.xml'],
+                             with_zookeeper=True, macros={"shard": 2, "replica": 1, "shard_bk": 1, "replica_bk": 2})
+node3_custom = cluster.add_instance('node3_custom', main_configs=['configs/remote_servers2.xml', 'configs/ddl_worker.xml'],
+                             with_zookeeper=True, macros={"shard": 3, "replica": 1, "shard_bk": 2, "replica_bk": 2})
+
+
 @pytest.fixture(scope="module")
 def started_cluster():
     try:
@@ -104,3 +112,44 @@ def test_atomic_database(started_cluster):
     node1.query("INSERT INTO replica_1.rmt VALUES (1, 'test')")
     node2.query("SYSTEM SYNC REPLICA replica_2.rmt", timeout=5)
     assert_eq_with_retry(node2, "SELECT * FROM replica_2.rmt", '1\ttest')
+
+def test_parallel_distributed_ddl(started_cluster):
+    nodes = [node1_custom, node2_custom, node3_custom]
+    settings = {"distributed_ddl_task_timeout": "0"}
+    node1_custom.query("CREATE DATABASE replica_1 ON CLUSTER cross_3shards_2replicas;")
+    node2_custom.query("CREATE DATABASE replica_2 ON CLUSTER cross_3shards_2replicas;")
+
+    #for node in nodes:
+    #    assert_eq_with_retry(node, "SELECT count() FROM system.databases where name like 'replica_%'", '2')
+    #    assert_eq_with_retry(node, "SELECT count() FROM system.databases where name like 'replica_%'", '2')
+
+    node3_custom.query('''CREATE TABLE replica_1.replicated_local  
+            ON CLUSTER cross_3shards_2replicas (part_key Date, id UInt32, shard_id UInt32)
+            ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard}/replicated_custom', '{replica}') 
+            partition by part_key order by id SETTINGS replicated_can_become_leader=0;''')
+    node1_custom.query('''CREATE TABLE replica_2.replicated_local  
+            ON CLUSTER cross_3shards_2replicas (part_key Date, id UInt32, shard_id UInt32)
+            ENGINE = ReplicatedMergeTree('/clickhouse/tables/{shard_bk}/replicated_custom', '{replica_bk}') 
+            partition by part_key order by id;''')
+
+    #for node in nodes:
+    #    assert_eq_with_retry(node, "SELECT count() FROM system.tables where name='replicated_local'", '2')
+    #    assert_eq_with_retry(node, "SELECT count() FROM system.tables where name='replicated_local'", '2')
+
+    for node in nodes:
+        node.query("INSERT INTO replica_1.replicated_local VALUES ('2020-11-28', 0, 0), ('2020-11-28', 0, 0), "
+                                                                 "('2020-11-29', 1, 0), ('2020-11-30', 3, 0)")
+
+
+    node3_custom.query("ALTER TABLE replica_2.replicated_local ON CLUSTER cross_3shards_2replicas DROP PARTITION '2020-11-30'", settings=settings)
+    #node1_custom.query("ALTER TABLE replica_2.replicated_local DROP PARTITION '2020-11-30'", settings={"distributed_ddl_task_timeout": "0"})
+    node2_custom.query("OPTIMIZE TABLE replica_2.replicated_local ON CLUSTER cross_3shards_2replicas FINAL DEDUPLICATE", settings=settings)
+    #node3_custom.query("OPTIMIZE TABLE replica_2.replicated_local FINAL DEDUPLICATE", settings={"distributed_ddl_task_timeout": "0"})
+
+    node2_custom.query("ALTER TABLE replica_1.replicated_local ON CLUSTER cross_3shards_2replicas DROP COLUMN shard_id", settings=settings)
+    #node3_custom.query("ALTER TABLE replica_2.replicated_local DROP COLUMN shard_id", settings={"distributed_ddl_task_timeout": "0"})
+    node1_custom.query("ALTER TABLE replica_1.replicated_local ON CLUSTER cross_3shards_2replicas DELETE WHERE id=1", settings=settings)
+    #node2_custom.query("ALTER TABLE replica_2.replicated_local DELETE WHERE id=1", settings={"distributed_ddl_task_timeout": "0"})
+
+    for node in nodes:
+        assert_eq_with_retry(node, "SELECT * FROM replica_1.replicated_local FORMAT TSV", "2020-11-28\t0\n", sleep_time=2)

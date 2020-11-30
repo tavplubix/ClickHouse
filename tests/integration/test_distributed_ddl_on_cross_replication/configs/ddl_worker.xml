@@ -1,0 +1,6 @@
+<yandex>
+    <distributed_ddl>
+        <path>/clickhouse/task_queue/ddl_custom</path>
+        <pool_size>8</pool_size>
+    </distributed_ddl>
+</yandex>
