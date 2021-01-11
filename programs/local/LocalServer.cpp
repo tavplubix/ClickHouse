@@ -273,12 +273,11 @@ try
     global_context->setCurrentDatabase(default_database);
     applyCmdOptions(*global_context);
 
-    if (config().has("path"))
+    String path = global_context->getPath();
+    if (!path.empty())
     {
-        String path = global_context->getPath();
-
         /// Lock path directory before read
-        status.emplace(path + "status", StatusFile::write_full_info);
+        status.emplace(global_context->getPath() + "status", StatusFile::write_full_info);
 
         LOG_DEBUG(log, "Loading metadata from {}", path);
         Poco::File(path + "data/").createDirectories();
