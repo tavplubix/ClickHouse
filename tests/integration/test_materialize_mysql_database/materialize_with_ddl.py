@@ -732,3 +732,18 @@ def clickhouse_killed_while_insert(clickhouse_node, mysql_node, service_name):
 
     mysql_node.query("DROP DATABASE kill_clickhouse_while_insert")
     clickhouse_node.query("DROP DATABASE kill_clickhouse_while_insert")
+
+def system_parts_test(clickhouse_node, mysql_node, service_name):
+    mysql_node.query("DROP DATABASE IF EXISTS system_parts_test")
+    clickhouse_node.query("DROP DATABASE IF EXISTS system_parts_test")
+    mysql_node.query("CREATE DATABASE system_parts_test")
+    mysql_node.query("CREATE TABLE system_parts_test.test ( `id` int(11) NOT NULL, PRIMARY KEY (`id`) ) ENGINE=InnoDB;")
+    mysql_node.query("INSERT INTO system_parts_test.test VALUES(1),(2),(3)")
+    def check_active_parts(num):
+        check_query(clickhouse_node, "SELECT count() FROM system.parts WHERE database = 'system_parts_test' AND table = 'test' AND active = 1", "{}\n".format(num))
+    clickhouse_node.query("CREATE DATABASE system_parts_test ENGINE = MaterializeMySQL('{}:3306', 'system_parts_test', 'root', 'clickhouse')".format(service_name))
+    check_active_parts(1)
+    mysql_node.query("INSERT INTO system_parts_test.test VALUES(4),(5),(6)")
+    check_active_parts(2)
+    clickhouse_node.query("OPTIMIZE TABLE system_parts_test.test")
+    check_active_parts(1)
