@@ -39,7 +39,7 @@ public:
         const StoragePtr & table,
         const ASTPtr & query) override;
 
-    void detachTablePermanently(const String & table_name) override;
+    void detachTablePermanently(const Context & context, const String & table_name) override;
 
     void dropTable(
         const Context & context,
