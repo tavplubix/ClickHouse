@@ -698,15 +698,41 @@ void DDLWorker::processTask(DDLTask & task)
     String active_node_path = task.entry_path + "/active/" + task.host_id_str;
     String finished_node_path = task.entry_path + "/finished/" + task.host_id_str;
 
+    /// It will tryRemove(...) on exception
+    auto active_node = zkutil::EphemeralNodeHolder::existing(active_node_path, *zookeeper);
+
+    /// Try fast path
     auto create_active_res = zookeeper->tryCreate(active_node_path, {}, zkutil::CreateMode::Ephemeral);
     if (create_active_res != Coordination::Error::ZOK)
     {
-        if (create_active_res != Coordination::Error::ZNONODE)
+        if (create_active_res != Coordination::Error::ZNONODE && create_active_res != Coordination::Error::ZNODEEXISTS)
+        {
+            assert(Coordination::isHardwareError(create_active_res));
             throw Coordination::Exception(create_active_res, active_node_path);
-        createStatusDirs(task.entry_path, zookeeper);
+        }
+
+        /// Status dirs were not created in enqueueQuery(...) or someone is removing entry
+        if (create_active_res == Coordination::Error::ZNONODE)
+            createStatusDirs(task.entry_path, zookeeper);
+
+        if (create_active_res == Coordination::Error::ZNODEEXISTS)
+        {
+            /// Connection has been lost and now we are retrying to write query status,
+            /// but our previous ephemeral node still exists.
+            assert(task.was_executed);
+            zkutil::EventPtr eph_node_disappeared = std::make_shared<Poco::Event>();
+            String dummy;
+            if (zookeeper->tryGet(active_node_path, dummy, nullptr, eph_node_disappeared))
+            {
+                constexpr int timeout_ms = 5000;
+                if (!eph_node_disappeared->tryWait(timeout_ms))
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Ephemeral node {} still exists, "
+                                    "probably it's owned by someone else", active_node_path);
+            }
+        }
+
         zookeeper->create(active_node_path, {}, zkutil::CreateMode::Ephemeral);
     }
-    auto active_node = zkutil::EphemeralNodeHolder::existing(active_node_path, *zookeeper);
 
     if (!task.was_executed)
     {
