@@ -1,7 +1,7 @@
 version: '2.3'
 services:
   mysql1:
-    image: mysql:5.7
+    image: yandex/clickhouse-mysql-client-test:${DOCKER_MYSQL_CLIENT_TAG:-latest}
     restart: always
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 1

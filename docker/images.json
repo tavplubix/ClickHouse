@@ -106,7 +106,7 @@
     "docker/test/integration/helper_container": {
         "name": "yandex/clickhouse-integration-helper",
         "dependent": []
-    },
+    }
     "docker/test/integration/mysql_golang_client": {
         "name": "yandex/clickhouse-mysql-golang-client",
         "dependent": []
@@ -158,6 +158,10 @@
     },
     "docker/test/sqlancer": {
         "name": "yandex/clickhouse-sqlancer-test",
+        "dependent": []
+    },
+    "docker/test/integration/mysql_client": {
+        "name": "yandex/clickhouse-mysql-client-test",
         "dependent": []
     }
 }

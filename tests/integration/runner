@@ -165,6 +165,8 @@ if __name__ == "__main__":
                 env_tags += "-e {}={} ".format("DOCKER_MYSQL_JS_CLIENT_TAG", tag)
             elif image == "yandex/clickhouse-mysql-php-client":
                 env_tags += "-e {}={} ".format("DOCKER_MYSQL_PHP_CLIENT_TAG", tag)
+            elif image == "yandex/clickhouse-mysql-client-test":
+                env_tags += "-e {}={} ".format("DOCKER_MYSQL_CLIENT_TAG", tag)
             elif image == "yandex/clickhouse-postgresql-java-client":
                 env_tags += "-e {}={} ".format("DOCKER_POSTGRESQL_JAVA_CLIENT_TAG", tag)
             elif image == "yandex/clickhouse-integration-test":

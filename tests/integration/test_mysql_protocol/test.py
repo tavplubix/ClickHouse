@@ -550,3 +550,44 @@ def test_types(server_address):
             assert math.isnan(result[key])
         else:
             assert result[key] == value
+
+
+expect_test_mysql_client_interactive = '''cat > test.expect << EOF
+log_user 0
+set timeout 5
+match_max 100000
+expect_after {
+    timeout {
+        exit 1
+    }
+}
+
+set basedir [file dirname $argv0]
+spawn bash -c "mysql --protocol tcp -h _HOST_ -P _PORT_ default -u default --password=123"
+expect "mysql> "
+
+send -- "USE system;\r"
+expect "Database changed"
+
+send -- "SELECT 1;\r"
+expect +------+
+expect |    1 |
+expect +------+
+
+send -- "quit;\r"
+expect eof
+EOF
+'''
+
+def test_mysql_client_interactive(mysql_client, server_address):
+    cmd = expect_test_mysql_client_interactive.replace('_HOST_',  str(server_address)).replace('_PORT_', str(server_port))
+    code, (stdout, stderr) = mysql_client.exec_run(cmd, demux=True)
+    print(stdout)
+    print(stderr)
+    assert code == 0
+    code, (stdout, stderr) = mysql_client.exec_run('''
+        expect -f test.expect
+    ''', demux=True)
+    print(stdout)
+    print(stderr)
+    assert code == 0
