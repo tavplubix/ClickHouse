@@ -1367,13 +1367,16 @@ bool StorageReplicatedMergeTree::executeLogEntry(LogEntry & entry)
 
     if (entry.type == LogEntry::ATTACH_PART)
     {
+        LOG_INFO(log, "Looking for detached part {} {}", entry.new_part_name, entry.part_checksum);
         if (MutableDataPartPtr part = attachPartHelperFoundValidPart(entry); part)
         {
+            LOG_INFO(log, "Found detached part {} {}", part->getNameWithState(), entry.part_checksum);
             Transaction transaction(*this);
 
             if (renameTempPartAndAdd(part, nullptr, &transaction))
                 checkPartChecksumsAndCommit(transaction, part);
 
+            LOG_INFO(log, "Attached part {} {}", part->getNameWithState(), entry.part_checksum);
             return true;
         }
     }
