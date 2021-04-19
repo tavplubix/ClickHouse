@@ -515,6 +515,11 @@ struct KeeperStorageMultiRequest final : public KeeperStorageRequest
                 ++i;
             }
 
+            for (const auto & concrete_request : concrete_requests)
+            {
+
+                std::cout << Coordination::toString(concrete_request->zk_request->getOpNum()) << " [" << zxid << "] " << concrete_request->zk_request->getPath() << "\n";
+            }
             response.error = Coordination::Error::ZOK;
             return { response_ptr, {} };
         }
@@ -703,7 +708,11 @@ KeeperStorage::ResponsesForSessions KeeperStorage::processRequest(const Coordina
         {
             auto watch_responses = storage_request->processWatches(watches, list_watches);
             results.insert(results.end(), watch_responses.begin(), watch_responses.end());
+
+            std::cout << Coordination::toString(zk_request->getOpNum()) << " [" << getZXID() << "] " << zk_request->getPath() << "\n";
         }
+
+
 
         response->xid = zk_request->xid;
         response->zxid = getZXID();
