@@ -2149,13 +2149,16 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
 {
     Stopwatch watch;
     auto & entry_replace = *entry.replace_range_entry;
+    LOG_DEBUG(log, "Executing log entry {} to replace parts range {} with {} parts from {}.{}",
+              entry.znode_name, entry_replace.drop_range_part_name, entry_replace.new_part_names.size(),
+              entry_replace.from_database, entry_replace.from_table);
     auto metadata_snapshot = getInMemoryMetadataPtr();
 
     MergeTreePartInfo drop_range = MergeTreePartInfo::fromPartName(entry_replace.drop_range_part_name, format_version);
     /// Range with only one block has special meaning ATTACH PARTITION
-    bool replace = drop_range.getBlocksCount() > 1;
+    bool replace = drop_range.getBlocksCount() > 1; //FIXME
 
-    queue.removePartProducingOpsInRange(getZooKeeper(), drop_range, entry);
+    queue.removePartProducingOpsInRange(getZooKeeper(), drop_range, entry); //FIXME
 
     struct PartDescription
     {
@@ -2226,7 +2229,16 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
         }
 
         if (parts_to_add.empty() && replace)
+        {
             parts_to_remove = removePartsInRangeFromWorkingSet(drop_range, true, false, data_parts_lock);
+            String parts_to_remove_str;
+            for (const auto & part : parts_to_remove)
+            {
+                parts_to_remove_str += part->name;
+                parts_to_remove_str += " ";
+            }
+            LOG_TRACE(log, "Replacing {} parts {}with empty set", parts_to_remove.size(), parts_to_remove_str);
+        }
     }
 
     if (parts_to_add.empty())
@@ -2361,8 +2373,9 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
 
     /// Filter covered parts
     PartDescriptions final_parts;
+    Strings final_part_names;
     {
-        Strings final_part_names = adding_parts_active_set.getParts();
+        final_part_names = adding_parts_active_set.getParts();
 
         for (const String & final_part_name : final_part_names)
         {
@@ -2380,7 +2393,7 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
                 if (!prev.found_new_part_info.isDisjoint(curr.found_new_part_info))
                 {
                     throw Exception("Intersected final parts detected: " + prev.found_new_part_name
-                        + " and " + curr.found_new_part_name + ". It should be investigated.", ErrorCodes::INCORRECT_DATA);
+                        + " and " + curr.found_new_part_name + ". It should be investigated.", ErrorCodes::LOGICAL_ERROR);
                 }
             }
         }
@@ -2459,7 +2472,17 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
 
             transaction.commit(&data_parts_lock);
             if (replace)
+            {
                 parts_to_remove = removePartsInRangeFromWorkingSet(drop_range, true, false, data_parts_lock);
+                String parts_to_remove_str;
+                for (const auto & part : parts_to_remove)
+                {
+                    parts_to_remove_str += part->name;
+                    parts_to_remove_str += " ";
+                }
+                LOG_TRACE(log, "Replacing {} parts {}with {} parts ", parts_to_remove.size(), parts_to_remove_str,
+                          final_parts.size(), boost::algorithm::join(final_part_names, ", "));
+            }
         }
 
         PartLog::addNewParts(getContext(), res_parts, watch.elapsed());
@@ -6320,6 +6343,13 @@ void StorageReplicatedMergeTree::movePartitionToTable(const StoragePtr & dest_ta
     {
         MergeTreePartInfo drop_range_dest;
         drop_range_dest.partition_id = drop_range.partition_id;
+        /// NOTE We don't have special log entry type for MOVE PARTITION, so we use REPLACE_RANGE
+        /// with dummy range of one block, which means "move, not replace"
+        /// FIXME
+        drop_range_dest.max_block = 0;
+        drop_range_dest.min_block = 0;
+        drop_range_dest.level = 0;
+        drop_range_dest.mutation = 0;
         drop_range_dest.max_block = drop_range.max_block;
         drop_range_dest.min_block = drop_range.max_block;   //FIXME typo?
         drop_range_dest.level = drop_range.level;
