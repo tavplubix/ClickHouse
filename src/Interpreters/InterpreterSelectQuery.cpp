@@ -389,6 +389,20 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         query_info.syntax_analyzer_result = syntax_analyzer_result;
 
+        //if (storage && !query.final() && storage->needRewriteQueryWithFinal(syntax_analyzer_result->requiredSourceColumns()))
+        //{
+        //    auto & tables_in_select_query = query.tables()->as<ASTTablesInSelectQuery &>();
+//
+        //    if (!tables_in_select_query.children.empty())
+        //    {
+        //        auto & tables_element = tables_in_select_query.children[0]->as<ASTTablesInSelectQueryElement &>();
+//
+        //        if (tables_element.table_expression)
+        //            tables_element.table_expression->as<ASTTableExpression &>().final = true;
+        //    }
+        //    assert(query.final());
+        //}
+
         /// Save scalar sub queries's results in the query context
         if (!options.only_analyze && context->hasQueryContext())
             for (const auto & it : syntax_analyzer_result->getScalars())

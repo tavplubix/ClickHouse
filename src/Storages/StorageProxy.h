@@ -19,6 +19,7 @@ public:
 
     bool isRemote() const override { return getNested()->isRemote(); }
     bool isView() const override { return getNested()->isView(); }
+    bool isDictionary() const override { return getNested()->isDictionary(); }
     bool supportsSampling() const override { return getNested()->supportsSampling(); }
     bool supportsFinal() const override { return getNested()->supportsFinal(); }
     bool supportsPrewhere() const override { return getNested()->supportsPrewhere(); }
@@ -27,6 +28,8 @@ public:
     bool supportsDeduplication() const override { return getNested()->supportsDeduplication(); }
     bool noPushingToViews() const override { return getNested()->noPushingToViews(); }
     bool hasEvenlyDistributedRead() const override { return getNested()->hasEvenlyDistributedRead(); }
+    bool supportsSubcolumns() const override { return getNested()->supportsSubcolumns(); }
+    bool prefersLargeBlocks() const override { return getNested()->prefersLargeBlocks(); }
 
     ColumnSizeByName getColumnSizes() const override { return getNested()->getColumnSizes(); }
     NamesAndTypesList getVirtuals() const override { return getNested()->getVirtuals(); }
@@ -63,9 +66,27 @@ public:
         return getNested()->read(column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
     }
 
+    void read(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        unsigned num_streams) override
+    {
+        getNested()->read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+    }
+
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override
     {
         return getNested()->write(query, metadata_snapshot, context);
+    }
+
+    QueryPipelinePtr distributedWrite(const ASTInsertQuery & query, ContextPtr context) override
+    {
+        return getNested()->distributedWrite(query, context);
     }
 
     void drop() override { getNested()->drop(); }
@@ -78,6 +99,8 @@ public:
     {
         getNested()->truncate(query, metadata_snapshot, context, lock);
     }
+
+    void checkTableCanBeRenamed() const override { getNested()->checkTableCanBeRenamed(); }
 
     void rename(const String & new_path_to_table_data, const StorageID & new_table_id) override
     {
@@ -150,6 +173,10 @@ public:
     Strings getDataPaths() const override { return getNested()->getDataPaths(); }
     StoragePolicyPtr getStoragePolicy() const override { return getNested()->getStoragePolicy(); }
     std::optional<UInt64> totalRows(const Settings & settings) const override { return getNested()->totalRows(settings); }
+    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo & info, ContextPtr context) const override
+    {
+        return getNested()->totalRowsByPartitionPredicate(info, context);
+    }
     std::optional<UInt64> totalBytes(const Settings & settings) const override { return getNested()->totalBytes(settings); }
     std::optional<UInt64> lifetimeRows() const override { return getNested()->lifetimeRows(); }
     std::optional<UInt64> lifetimeBytes() const override { return getNested()->lifetimeBytes(); }
